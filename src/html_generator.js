@@ -2,14 +2,18 @@ const fs = require('fs');
 const path = require('path');
 
 class HTMLGenerator {
-  constructor(outputDir, displayDate) {
+  constructor(outputDir, timestamp) {
     this.outputDir = outputDir;
-    this.indexPath = path.join(outputDir, 'index.html');
-    this.displayDate = displayDate;
-    this.stream = fs.createWriteStream(this.indexPath, { encoding: 'utf-8' });
+    this.timestamp = timestamp;
+    this.pages = [];
+  }
 
-    // ヘッダー部分をストリームに書き込み
-    this.stream.write(`
+  addPage(title, url, mhtmlPath, screenshotPath) {
+    this.pages.push({ title, url, mhtmlPath, screenshotPath });
+  }
+
+  save() {
+    const htmlContent = `
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -27,32 +31,21 @@ class HTMLGenerator {
   </style>
 </head>
 <body>
-  <h1>取得したページ一覧 - ${displayDate}</h1>
-`);
-  }
-
-  addPage(title, url, mhtmlPath, screenshotPath) {
-    const sanitizedMHTMLPath = path.relative(this.outputDir, mhtmlPath).replace(/\\/g, '/');
-    const sanitizedScreenshotPath = path.relative(this.outputDir, screenshotPath).replace(/\\/g, '/');
-
-    this.stream.write(`
+  <h1>取得したページ一覧 - ${this.timestamp}</h1>
+  ${this.pages.map(page => `
     <div class="card">
-      <h2>${title}</h2>
-      <p>URL: <a href="${url}" target="_blank">${url}</a></p>
+      <h2>${page.title}</h2>
+      <p>URL: <a href="${page.url}" target="_blank">${page.url}</a></p>
       <div class="links">
-        <a href="${sanitizedMHTMLPath}" target="_blank" class="button">MHTMLファイル</a>
-        <a href="${sanitizedScreenshotPath}" target="_blank" class="button">スクリーンショット</a>
+        <a href="MHTML/${path.basename(page.mhtmlPath)}" target="_blank" class="button">MHTMLファイル</a>
+        <a href="Screenshots/${path.basename(page.screenshotPath)}" target="_blank" class="button">スクリーンショット</a>
       </div>
-    </div>`);
-  }
-
-  save() {
-    this.stream.write(`
+    </div>`).join('\n')}
 </body>
 </html>
-`);
-    this.stream.end();
-    console.log(`Index page generated at: ${this.indexPath}`);
+    `;
+
+    fs.writeFileSync(path.join(this.outputDir, 'index.html'), htmlContent, 'utf-8');
   }
 }
 

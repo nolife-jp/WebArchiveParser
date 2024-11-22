@@ -47,4 +47,14 @@ class Logger {
   }
 }
 
-module.exports = Logger;
+// デフォルトのインスタンスを生成
+const loggerInstance = new Logger(path.resolve(__dirname, '../logs'), process.argv.includes('--debug'));
+
+// 関数形式でのエクスポート
+const logInfo = (message) => loggerInstance.info(message);
+const logDebug = (message) => loggerInstance.debug(message);
+const logWarn = (message) => loggerInstance.warn(message);
+const logError = (message) => loggerInstance.error(message);
+
+// 正しいエクスポート
+module.exports = { Logger, logInfo, logDebug, logWarn, logError };

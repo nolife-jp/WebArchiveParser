@@ -1,89 +1,82 @@
-const puppeteer = require('puppeteer');
+const fs = require('fs');
+const path = require('path');
 const { loadConfig } = require('./config');
-const Logger = require('./logger');
-const { createDir, readUrlList } = require('./file_utils');
-const { capturePage } = require('./puppeteer_utils');
+const { logInfo, logDebug, logWarn, logError } = require('./logger');
+const { initializeDirectories, saveUrlList } = require('./file_utils');
+const fetcher = require('./fetcher');
+const puppeteerUtils = require('./puppeteer_utils');
 const HTMLGenerator = require('./html_generator');
 
-// JST時刻を取得するヘルパー関数
-const getJSTTime = () => {
-  const now = new Date();
-  const formattedTime = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
-  return formattedTime;
-};
-
-// ディレクトリ用の日時フォーマットを生成
-const formatDirDate = (jstTime) => {
-  const [date, time] = jstTime.split(' ');
-  const formattedTime = time.replace(/:/g, '').slice(0, 4); // 秒を削除
-  return `${date}_${formattedTime}`;
-};
-
-// 初期化処理をまとめた関数
-const initializeDirectories = (baseDir, dirDate) => {
-  const finalDir = createDir(baseDir, 'webarchive', dirDate);
-  const mhtmlDir = createDir(finalDir, 'MHTML');
-  const screenshotDir = createDir(finalDir, 'Screenshots');
-  return { finalDir, mhtmlDir, screenshotDir };
-};
-
-// メイン処理
 (async () => {
-  const config = loadConfig();
-  const baseDir = config.paths.base_dir;
-  const urlListPath = config.paths.url_list;
+  try {
+    const args = process.argv.slice(2);
+    if (args.length < 1) {
+      logError('Usage: node src/main.js <URL> [max_pages]');
+      process.exit(1);
+    }
 
-  const displayDate = getJSTTime();
-  const dirDate = formatDirDate(displayDate);
+    const targetUrl = args[0];
+    const maxPages = args[1] ? parseInt(args[1], 10) : null;
 
-  const isDebugMode = process.argv.includes('--debug'); // デバッグモードの判定
-  const logger = new Logger(`${baseDir}/logs`, isDebugMode);
+    logInfo('WebArchiver started');
+    logInfo(`Target URL: ${targetUrl}`);
+    logInfo(`Max Pages: ${maxPages || 'Unlimited'}`);
 
-  logger.info('WebArchiver started');
+    const config = loadConfig();
+    const baseDir = path.resolve(config.paths.base_dir);
 
-  // 初期化処理
-  const { finalDir, mhtmlDir, screenshotDir } = initializeDirectories(baseDir, dirDate);
-  logger.debug(`Directories initialized: ${finalDir}, ${mhtmlDir}, ${screenshotDir}`);
+    // 修正: 正しいディレクトリ形式でタイムスタンプを生成
+    const now = new Date();
+    const timestamp = now.toISOString().slice(0, 16).replace(/-|:/g, '').replace('T', '_');
+    const targetDir = path.join(baseDir, 'webarchive', timestamp);
+    const { mhtmlDir, screenshotsDir } = initializeDirectories(targetDir);
+    logDebug(`Directories initialized: ${targetDir}, ${mhtmlDir}, ${screenshotsDir}`);
 
-  // HTMLGenerator の初期化
-  const htmlGenerator = new HTMLGenerator(finalDir, displayDate);
+    logInfo('Fetching URLs...');
+    const urls = await fetcher.fetchUrls(targetUrl, maxPages);
+    logInfo(`Fetched ${urls.length} URLs`);
 
-  // URLリストの読み込み
-  const urls = readUrlList(urlListPath);
-  const totalUrls = urls.length;
+    const urlListPath = path.join(targetDir, 'urlList.txt');
+    saveUrlList(urlListPath, urls);
+    logInfo(`Saved URL list to: ${urlListPath}`);
 
-  logger.info(`Total URLs to process: ${totalUrls}`);
+    const browser = await puppeteerUtils.launchBrowser();
+    logInfo('Browser launched');
 
-  const browser = await puppeteer.launch();
-  logger.debug('Puppeteer launched');
+    const htmlGenerator = new HTMLGenerator(targetDir, new Date().toISOString());
+    const errors = [];
 
-  // URL処理ループ
-  let errors = [];
-  await Promise.all(
-    urls.map(async (url, index) => {
-      const progress = `[${index + 1}/${totalUrls}]`;
+    for (let i = 0; i < urls.length; i++) {
+      const url = urls[i];
+      const progress = `[${i + 1}/${urls.length}]`;
 
       try {
-        logger.debug(`${progress} Processing URL: ${url}`);
-        const result = await capturePage(browser, url, { mhtml: mhtmlDir, screenshots: screenshotDir });
+        logInfo(`${progress} Processing URL: ${url}`);
+        const result = await puppeteerUtils.capturePage(browser, url, {
+          mhtmlDir,
+          screenshotsDir,
+        });
         htmlGenerator.addPage(result.title, url, result.mhtmlPath, result.screenshotPath);
-        logger.info(`${progress} INFO: Saved: ${url}`);
+        logInfo(`${progress} Saved: ${url}`);
       } catch (error) {
+        logError(`${progress} Failed to process URL: ${url}`);
+        logError(`Reason: ${error.message}`);
         errors.push({ url, error });
-        logger.error(`${progress} ERROR: Failed to save ${url}: ${error.message}`);
       }
-    })
-  );
+    }
 
-  // エラーログのまとめ出力
-  if (errors.length > 0) {
-    logger.warn(`${errors.length} URLs failed to process.`);
-    errors.forEach(({ url, error }) => logger.warn(`Failed URL: ${url}, Reason: ${error.message}`));
+    htmlGenerator.save();
+    logInfo(`Generated index.html at: ${targetDir}`);
+
+    if (errors.length > 0) {
+      logWarn(`${errors.length} URLs failed to process.`);
+      errors.forEach(({ url, error }) => logWarn(`Failed URL: ${url}, Reason: ${error.message}`));
+    }
+
+    await browser.close();
+    logInfo('WebArchiver finished');
+  } catch (error) {
+    logError(`Critical Error: ${error.message}`);
+    process.exit(1);
   }
-
-  htmlGenerator.save();
-  logger.info(`Index page generated at: ${finalDir}/index.html`);
-
-  await browser.close();
-  logger.info('WebArchiver finished');
 })();

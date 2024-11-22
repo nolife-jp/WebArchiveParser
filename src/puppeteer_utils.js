@@ -1,41 +1,36 @@
 const puppeteer = require('puppeteer');
-const fs = require('fs');
 const path = require('path');
+const fs = require('fs');
 
-/**
- * ページをキャプチャする関数
- * @param {object} browser - Puppeteerのブラウザインスタンス
- * @param {string} url - キャプチャ対象のURL
- * @param {object} outputDirs - 出力先ディレクトリ情報
- * @returns {object} - ページタイトル、MHTMLパス、スクリーンショットパス
- */
-const capturePage = async (browser, url, outputDirs) => {
-  const page = await browser.newPage();
-
-  // ビューポートサイズを設定
-  await page.setViewport({
-    width: 1280, // 任意の幅
-    height: 720, // 任意の高さ
-    deviceScaleFactor: 2, // 高解像度設定
-  });
-
-  // ページを開く
-  await page.goto(url, { waitUntil: 'networkidle2' });
-
-  // MHTMLの生成
-  const client = await page.target().createCDPSession();
-  const { data } = await client.send('Page.captureSnapshot', { format: 'mhtml' });
-  const mhtmlPath = path.join(outputDirs.mhtml, `${url.replace(/https?:\/\//, '').replace(/[\/:?*|"<>]/g, '_')}.mhtml`);
-  fs.writeFileSync(mhtmlPath, data);
-
-  // スクリーンショットの保存
-  const screenshotPath = path.join(outputDirs.screenshots, `${url.replace(/https?:\/\//, '').replace(/[\/:?*|"<>]/g, '_')}.png`);
-  await page.screenshot({ path: screenshotPath, fullPage: true });
-
-  const title = await page.title();
-  await page.close();
-
-  return { title, mhtmlPath, screenshotPath };
+const launchBrowser = async () => {
+  return puppeteer.launch();
 };
 
-module.exports = { capturePage };
+const capturePage = async (browser, url, { mhtmlDir, screenshotsDir }) => {
+  const page = await browser.newPage();
+  try {
+    await page.goto(url, { waitUntil: 'domcontentloaded' });
+
+    // ページタイトルを取得
+    const title = await page.title() || 'No Title';
+
+    // URLに基づいたファイル名生成
+    const sanitizedUrl = url.replace(/https?:\/\//, '').replace(/[^a-zA-Z0-9]/g, '_');
+    const mhtmlPath = path.join(mhtmlDir, `${sanitizedUrl}.mhtml`);
+    const screenshotPath = path.join(screenshotsDir, `${sanitizedUrl}.png`);
+
+    // MHTML保存
+    const cdp = await page.target().createCDPSession();
+    const { data } = await cdp.send('Page.captureSnapshot', { format: 'mhtml' });
+    fs.writeFileSync(mhtmlPath, data);
+
+    // スクリーンショット保存
+    await page.screenshot({ path: screenshotPath });
+
+    return { title, url, mhtmlPath, screenshotPath };
+  } finally {
+    await page.close();
+  }
+};
+
+module.exports = { launchBrowser, capturePage };
