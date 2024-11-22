@@ -6,7 +6,10 @@ class HTMLGenerator {
     this.outputDir = outputDir;
     this.indexPath = path.join(outputDir, 'index.html');
     this.displayDate = displayDate;
-    this.content = `
+    this.stream = fs.createWriteStream(this.indexPath, { encoding: 'utf-8' });
+
+    // ヘッダー部分をストリームに書き込み
+    this.stream.write(`
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -25,27 +28,30 @@ class HTMLGenerator {
 </head>
 <body>
   <h1>取得したページ一覧 - ${displayDate}</h1>
-`;
+`);
   }
 
   addPage(title, url, mhtmlPath, screenshotPath) {
-    this.content += `
+    const sanitizedMHTMLPath = path.relative(this.outputDir, mhtmlPath).replace(/\\/g, '/');
+    const sanitizedScreenshotPath = path.relative(this.outputDir, screenshotPath).replace(/\\/g, '/');
+
+    this.stream.write(`
     <div class="card">
       <h2>${title}</h2>
       <p>URL: <a href="${url}" target="_blank">${url}</a></p>
       <div class="links">
-        <a href="${path.relative(this.outputDir, mhtmlPath).replace(/\\/g, '/')}" target="_blank" class="button">MHTMLファイル</a>
-        <a href="${path.relative(this.outputDir, screenshotPath).replace(/\\/g, '/')}" target="_blank" class="button">スクリーンショット</a>
+        <a href="${sanitizedMHTMLPath}" target="_blank" class="button">MHTMLファイル</a>
+        <a href="${sanitizedScreenshotPath}" target="_blank" class="button">スクリーンショット</a>
       </div>
-    </div>`;
+    </div>`);
   }
 
   save() {
-    this.content += `
+    this.stream.write(`
 </body>
 </html>
-`;
-    fs.writeFileSync(this.indexPath, this.content, 'utf-8');
+`);
+    this.stream.end();
     console.log(`Index page generated at: ${this.indexPath}`);
   }
 }
