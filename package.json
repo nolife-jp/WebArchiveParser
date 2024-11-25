@@ -1,5 +1,8 @@
 {
   "dependencies": {
+    "axios": "^1.7.7",
+    "cheerio": "^1.0.0",
+    "dayjs": "^1.11.13",
     "ini": "^5.0.0",
     "puppeteer": "^23.9.0"
   }

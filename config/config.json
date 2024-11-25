@@ -1,0 +1,12 @@
+{
+    "paths": {
+      "outputDir": "output/webarchive",
+      "logsDir": "logs"
+    },
+    "puppeteer": {
+      "viewport": { "width": 1280, "height": 720 },
+      "headless": true
+    },
+    "timestampFormat": "YYYY-MM-DD_HHmm"
+  }
+  
