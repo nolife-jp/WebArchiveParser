@@ -1,42 +1,28 @@
-const puppeteer = require('puppeteer');
+const puppeteer = require("puppeteer");
 
-/**
- * Puppeteerでブラウザを起動
- * @returns {Promise<Browser>} 起動したブラウザインスタンス
- */
-const launchBrowser = async () => {
+const launchBrowser = async (config) => {
   return await puppeteer.launch({
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    headless: config.headless,
+    defaultViewport: config.viewport,
   });
 };
 
-/**
- * ページをキャプチャし、スクリーンショットとMHTMLを保存
- * @param {Browser} browser - Puppeteerブラウザインスタンス
- * @param {string} url - 対象URL
- * @param {Object} paths - 保存先のパス
- * @returns {Object} - 保存結果
- */
-const capturePage = async (browser, url, paths) => {
-  const { mhtmlDir, screenshotsDir } = paths;
+const capturePage = async (browser, url, mhtmlDir, screenshotsDir) => {
   const page = await browser.newPage();
+  await page.goto(url, { waitUntil: "networkidle2" });
 
-  await page.goto(url, { waitUntil: 'networkidle2' });
+  const title = (await page.title()) || "No_Title";
+  const sanitizedTitle = title.replace(/[<>:"/\\|?*]+/g, "_");
 
-  const title = (await page.title()) || 'No Title';
-  const safeTitle = title.replace(/[^a-zA-Z0-9]/g, '_');
+  const mhtmlPath = `${mhtmlDir}/${sanitizedTitle}.mhtml`;
+  const screenshotPath = `${screenshotsDir}/${sanitizedTitle}.png`;
 
-  const screenshotPath = `${screenshotsDir}/${safeTitle}.png`;
-  const mhtmlPath = `${mhtmlDir}/${safeTitle}.mhtml`;
-
-  await page.screenshot({ path: screenshotPath, fullPage: true });
-  const mhtmlContent = await page.evaluate(() => document.documentElement.outerHTML);
-  require('fs').writeFileSync(mhtmlPath, mhtmlContent);
+  await page.screenshot({ path: screenshotPath });
+  const mhtmlContent = await page.content();
+  require("fs").writeFileSync(mhtmlPath, mhtmlContent);
 
   await page.close();
-
-  return { title, screenshotPath, mhtmlPath };
+  return { title, mhtmlPath, screenshotPath };
 };
 
 module.exports = { launchBrowser, capturePage };

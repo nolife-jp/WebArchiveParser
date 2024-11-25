@@ -1,24 +1,14 @@
-const axios = require('axios');
+const { fetchTicketJamUrls } = require("../sites/ticketjam");
+const { fetchTicketCoUrls } = require("../sites/ticketco");
 
-/**
- * URLをフェッチする
- * @param {string} targetUrl - 対象のURL
- * @param {number|null} maxPages - 最大ページ数
- * @returns {Promise<string[]>} - URLの配列
- */
-const fetchUrls = async (targetUrl, maxPages = null) => {
-  // サンプルのフェッチロジック
-  console.log(`Fetching URLs from: ${targetUrl}`);
-  const fetchedUrls = [];
-
-  for (let i = 1; i <= (maxPages || 10); i++) {
-    const response = await axios.get(`${targetUrl}?page=${i}`);
-    // URLのパースロジックを追加
-    // ...
-    fetchedUrls.push(`${targetUrl}?page=${i}`);
+const getSiteFetcher = (targetUrl) => {
+  if (targetUrl.includes("ticketjam.jp")) {
+    return fetchTicketJamUrls;
   }
-
-  return fetchedUrls;
+  if (targetUrl.includes("ticket.co.jp")) {
+    return fetchTicketCoUrls;
+  }
+  return null;
 };
 
-module.exports = { fetchUrls };
+module.exports = { getSiteFetcher };

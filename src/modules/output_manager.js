@@ -1,18 +1,15 @@
-const { createDir } = require('../utils/file_utils');
-const { getCurrentTimestamp } = require('../utils/time_utils');
+const fs = require("fs");
+const path = require("path");
 
-/**
- * 出力ディレクトリを初期化
- * @param {string} baseDir - ベースディレクトリ
- * @returns {Object} - 各ディレクトリパス
- */
 const initializeOutputDirs = (baseDir) => {
-  const timestamp = getCurrentTimestamp();
-  const outputDir = createDir(baseDir, 'output', 'webarchive', timestamp);
-  const mhtmlDir = createDir(outputDir, 'MHTML');
-  const screenshotsDir = createDir(outputDir, 'Screenshots');
+  const mhtmlDir = path.join(baseDir, "MHTML");
+  const screenshotsDir = path.join(baseDir, "Screenshots");
 
-  return { outputDir, mhtmlDir, screenshotsDir };
+  [baseDir, mhtmlDir, screenshotsDir].forEach((dir) => {
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  });
+
+  return { mhtmlDir, screenshotsDir };
 };
 
 module.exports = { initializeOutputDirs };

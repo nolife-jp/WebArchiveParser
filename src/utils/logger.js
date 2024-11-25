@@ -1,3 +1,5 @@
+// ファイルパス: src/utils/logger.js
+
 const fs = require('fs');
 const path = require('path');
 
@@ -15,15 +17,9 @@ class Logger {
     }
   }
 
-  /**
-   * JST時刻付きのメッセージを出力
-   * @param {string} level - ログレベル
-   * @param {string} message - ログメッセージ
-   */
   log(level, message) {
     const timestamp = new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
     const formatted = `[${timestamp}] ${level.toUpperCase()}: ${message}`;
-
     fs.appendFileSync(this.logFile, formatted + '\n');
     if (this.isDebug || level !== 'debug') {
       console.log(formatted);
@@ -47,11 +43,11 @@ class Logger {
   }
 }
 
-const logger = new Logger(path.resolve(__dirname, '../../logs'), false);
+// シングルトンインスタンスの作成
+const logger = new Logger(path.resolve(__dirname, '../../logs'), true);
 
 const logInfo = (message) => logger.info(message);
 const logDebug = (message) => logger.debug(message);
-const logWarn = (message) => logger.warn(message);
 const logError = (message) => logger.error(message);
 
-module.exports = { logInfo, logDebug, logWarn, logError };
+module.exports = { logInfo, logDebug, logError };
