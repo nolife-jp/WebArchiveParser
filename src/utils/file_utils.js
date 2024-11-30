@@ -1,37 +1,38 @@
-const fs = require('fs');
-const path = require('path');
+const path = require("path");
 
 /**
- * ディレクトリを作成
- * @param {...string} paths - ディレクトリパス
- * @returns {string} - 作成されたディレクトリのパス
+ * URL から安全なファイル名を生成
+ * @param {string} url - 対象の URL
+ * @returns {string} - 安全なファイル名
  */
-const createDir = (...paths) => {
-  const fullPath = path.resolve(...paths);
-  if (!fs.existsSync(fullPath)) {
-    fs.mkdirSync(fullPath, { recursive: true });
+function generateSafeFileName(url) {
+  if (!url) {
+    throw new Error("URL is required to generate a file name.");
   }
-  return fullPath;
-};
+  return url.replace(/[^a-zA-Z0-9]/g, "_");
+}
 
 /**
- * ディレクトリの初期化
- * @param {string} baseDir - 基本ディレクトリ
- * @returns {Object} - 初期化されたディレクトリ情報
+ * MHTML とスクリーンショットの保存パスを生成
+ * @param {Object} options - パス生成用のオプション
+ * @param {string} options.baseDir - ベースディレクトリ
+ * @param {string} options.fileName - ファイル名
+ * @returns {Object} - 保存パス
  */
-const initializeDirectories = (baseDir) => {
-  const mhtmlDir = createDir(baseDir, 'MHTML');
-  const screenshotsDir = createDir(baseDir, 'Screenshots');
-  return { mhtmlDir, screenshotsDir };
-};
+function generateOutputPaths({ baseDir, fileName }) {
+  if (!baseDir || typeof baseDir !== "string") {
+    console.error(`generateOutputPaths received invalid parameters: baseDir=${baseDir}, fileName=${fileName}`);
+    throw new Error("Invalid baseDir parameter");
+  }
+  if (!fileName || typeof fileName !== "string") {
+    console.error(`generateOutputPaths received invalid parameters: baseDir=${baseDir}, fileName=${fileName}`);
+    throw new Error("Invalid fileName parameter");
+  }
 
-/**
- * URLリストを保存
- * @param {string} filePath - 保存先のパス
- * @param {string[]} urls - URLの配列
- */
-const saveUrlList = (filePath, urls) => {
-  fs.writeFileSync(filePath, urls.join('\n'), 'utf-8');
-};
+  return {
+    screenshotPath: path.join(baseDir, "Screenshots", `${fileName}.png`),
+    mhtmlPath: path.join(baseDir, "MHTML", `${fileName}.mhtml`),
+  };
+}
 
-module.exports = { createDir, initializeDirectories, saveUrlList };
+module.exports = { generateSafeFileName, generateOutputPaths };

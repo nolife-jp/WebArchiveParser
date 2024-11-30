@@ -1,5 +1,3 @@
-// ファイルパス: src/sites/ticketjam.js
-
 const cheerio = require('cheerio');
 const axios = require('axios');
 
@@ -19,7 +17,14 @@ async function fetchTicketJamUrls(baseUrl, maxPages = 1) {
 
       if (response.status === 200) {
         const $ = cheerio.load(response.data);
-        $(".eventlist__item a.eventlist__wrap").each((_, element) => {
+
+        const items = $(".eventlist__item a.eventlist__wrap");
+        if (items.length === 0) {
+          console.log(`ページ ${page} にイベントが見つかりませんでした。処理を終了します。`);
+          break; // イベントがない場合はループを抜ける
+        }
+
+        items.each((_, element) => {
           const href = $(element).attr("href");
           if (href && href.startsWith("/ticket/live_domestic")) {
             fetchedUrls.push(`https://ticketjam.jp${href}`);
@@ -27,6 +32,7 @@ async function fetchTicketJamUrls(baseUrl, maxPages = 1) {
         });
       } else {
         console.error(`ページ ${page} の取得に失敗しました。ステータスコード: ${response.status}`);
+        break; // ページ取得に失敗した場合はループを抜ける
       }
     }
   } catch (error) {

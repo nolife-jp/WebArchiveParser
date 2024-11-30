@@ -1,15 +1,26 @@
 const fs = require("fs");
 const path = require("path");
 
-const initializeOutputDirs = (baseDir) => {
+function initializeOutputDirs(baseDir) {
   const mhtmlDir = path.join(baseDir, "MHTML");
   const screenshotsDir = path.join(baseDir, "Screenshots");
 
-  [baseDir, mhtmlDir, screenshotsDir].forEach((dir) => {
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  });
+  fs.mkdirSync(mhtmlDir, { recursive: true });
+  fs.mkdirSync(screenshotsDir, { recursive: true });
 
-  return { mhtmlDir, screenshotsDir };
-};
+  return {
+    baseDir: baseDir,
+    mhtmlDir: mhtmlDir,
+    screenshotsDir: screenshotsDir,
+  };
+}
 
-module.exports = { initializeOutputDirs };
+function generateOutputPaths({ baseDir, url }) {
+  const safeFileName = url.replace(/[^a-zA-Z0-9]/g, "_");
+  return {
+    mhtmlPath: path.join(baseDir, "MHTML", `${safeFileName}.mhtml`),
+    screenshotPath: path.join(baseDir, "Screenshots", `${safeFileName}.png`),
+  };
+}
+
+module.exports = { initializeOutputDirs, generateOutputPaths };

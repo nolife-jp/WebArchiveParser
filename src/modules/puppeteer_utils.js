@@ -1,28 +1,38 @@
 const puppeteer = require("puppeteer");
+const fs = require("fs");
 
-const launchBrowser = async (config) => {
-  return await puppeteer.launch({
-    headless: config.headless,
-    defaultViewport: config.viewport,
-  });
-};
+async function launchBrowser(options) {
+  const browser = await puppeteer.launch(options);
+  return browser;
+}
 
-const capturePage = async (browser, url, mhtmlDir, screenshotsDir) => {
+async function capturePage(browser, url, outputPaths) {
   const page = await browser.newPage();
-  await page.goto(url, { waitUntil: "networkidle2" });
+  try {
+    await page.goto(url, { waitUntil: "networkidle2" });
 
-  const title = (await page.title()) || "No_Title";
-  const sanitizedTitle = title.replace(/[<>:"/\\|?*]+/g, "_");
+    // ページタイトルを取得
+    const pageTitle = await page.title();
 
-  const mhtmlPath = `${mhtmlDir}/${sanitizedTitle}.mhtml`;
-  const screenshotPath = `${screenshotsDir}/${sanitizedTitle}.png`;
+    // MHTMLスナップショットを取得
+    const client = await page.target().createCDPSession();
+    const { data } = await client.send("Page.captureSnapshot", { format: "mhtml" });
 
-  await page.screenshot({ path: screenshotPath });
-  const mhtmlContent = await page.content();
-  require("fs").writeFileSync(mhtmlPath, mhtmlContent);
+    // MHTMLとスクリーンショットを保存
+    fs.writeFileSync(outputPaths.mhtmlPath, data);
+    await page.screenshot({ path: outputPaths.screenshotPath, fullPage: true });
 
-  await page.close();
-  return { title, mhtmlPath, screenshotPath };
-};
+    return {
+      title: pageTitle,
+      url: url,
+      mhtmlPath: outputPaths.mhtmlPath,
+      screenshotPath: outputPaths.screenshotPath,
+    };
+  } catch (error) {
+    throw new Error(`Failed to capture page: ${error.message}`);
+  } finally {
+    await page.close();
+  }
+}
 
 module.exports = { launchBrowser, capturePage };

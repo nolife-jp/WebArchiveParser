@@ -1,8 +1,9 @@
 const path = require("path");
 const { getSiteFetcher } = require("./modules/fetcher");
 const { launchBrowser, capturePage } = require("./modules/puppeteer_utils");
-const { initializeOutputDirs } = require("./modules/output_manager");
+const { initializeOutputDirs, generateOutputPaths } = require("./modules/output_manager");
 const Logger = require("./utils/logger");
+const HTMLGenerator = require("./modules/html_generator");
 const { loadConfig } = require("../config/loader");
 const { getCurrentTimestamp } = require("./utils/time_utils");
 
@@ -24,10 +25,10 @@ const { getCurrentTimestamp } = require("./utils/time_utils");
 
     const config = loadConfig();
     const timestamp = getCurrentTimestamp(config.timestampFormat);
-    const outputDir = path.join(config.paths.outputDir, timestamp);
+    const outputDir = path.resolve(config.paths.outputDir, timestamp);
 
     const { mhtmlDir, screenshotsDir } = initializeOutputDirs(outputDir);
-    logger.debug(`Directories initialized: ${mhtmlDir}, ${screenshotsDir}`);
+    logger.debug(`Directories initialized: MHTML -> ${mhtmlDir}, Screenshots -> ${screenshotsDir}`);
 
     const fetchSiteUrls = getSiteFetcher(targetUrl);
     if (!fetchSiteUrls) {
@@ -41,11 +42,23 @@ const { getCurrentTimestamp } = require("./utils/time_utils");
     const browser = await launchBrowser(config.puppeteer);
     logger.info("Browser launched");
 
+    const htmlGenerator = new HTMLGenerator(outputDir, "Captured Pages");
+
     for (let i = 0; i < urls.length; i++) {
       const url = urls[i];
       logger.info(`[${i + 1}/${urls.length}] Processing URL: ${url}`);
       try {
-        await capturePage(browser, url, mhtmlDir, screenshotsDir);
+        const outputPaths = generateOutputPaths({
+          baseDir: outputDir,
+          url: url,
+        });
+
+        // capturePage関数からページ情報を取得
+        const pageInfo = await capturePage(browser, url, outputPaths);
+
+        // ページ情報をHTMLGeneratorに追加
+        htmlGenerator.addPage(pageInfo);
+
         logger.info(`[${i + 1}/${urls.length}] Saved: ${url}`);
       } catch (error) {
         logger.error(`[${i + 1}/${urls.length}] Failed: ${error.message}`);
@@ -53,6 +66,9 @@ const { getCurrentTimestamp } = require("./utils/time_utils");
     }
 
     await browser.close();
+
+    htmlGenerator.save();
+    logger.info(`Generated index.html at: ${outputDir}`);
     logger.info("WebArchiver finished");
   } catch (error) {
     logger.error(`Critical Error: ${error.message}`);

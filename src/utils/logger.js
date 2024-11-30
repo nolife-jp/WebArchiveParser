@@ -1,11 +1,12 @@
-// ファイルパス: src/utils/logger.js
-
 const fs = require('fs');
 const path = require('path');
+const dayjs = require('dayjs');
+const utc = require('dayjs/plugin/utc');
+const timezone = require('dayjs/plugin/timezone');
 
-/**
- * ロガークラス
- */
+dayjs.extend(utc);
+dayjs.extend(timezone);
+
 class Logger {
   constructor(logDir, isDebug = false) {
     this.logDir = logDir;
@@ -18,11 +19,11 @@ class Logger {
   }
 
   log(level, message) {
-    const timestamp = new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
-    const formatted = `[${timestamp}] ${level.toUpperCase()}: ${message}`;
-    fs.appendFileSync(this.logFile, formatted + '\n');
+    const timestamp = dayjs().tz('Asia/Tokyo').format('YYYY/MM/DD HH:mm:ss');
+    const formattedMessage = `[${timestamp}] ${level.toUpperCase()}: ${message}`;
+    fs.appendFileSync(this.logFile, formattedMessage + '\n');
     if (this.isDebug || level !== 'debug') {
-      console.log(formatted);
+      console.log(formattedMessage);
     }
   }
 
@@ -43,11 +44,4 @@ class Logger {
   }
 }
 
-// シングルトンインスタンスの作成
-const logger = new Logger(path.resolve(__dirname, '../../logs'), true);
-
-const logInfo = (message) => logger.info(message);
-const logDebug = (message) => logger.debug(message);
-const logError = (message) => logger.error(message);
-
-module.exports = { logInfo, logDebug, logError };
+module.exports = Logger;
