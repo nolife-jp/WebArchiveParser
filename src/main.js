@@ -44,6 +44,9 @@ const { getCurrentTimestamp } = require("./utils/time_utils");
 
     const htmlGenerator = new HTMLGenerator(outputDir, "Captured Pages");
 
+    // URLリストを保存
+    htmlGenerator.saveUrlList(urls); // 新しい機能をここに追加
+
     for (let i = 0; i < urls.length; i++) {
       const url = urls[i];
       logger.info(`[${i + 1}/${urls.length}] Processing URL: ${url}`);

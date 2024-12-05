@@ -26,6 +26,15 @@ class HTMLGenerator {
     const htmlContent = ejs.render(fs.readFileSync(templatePath, "utf-8"), data);
     fs.writeFileSync(outputPath, htmlContent, "utf-8");
   }
+
+  /**
+   * URLリストを urlList.txt として保存
+   * @param {string[]} urls - 保存するURLリスト
+   */
+  saveUrlList(urls) {
+    const filePath = path.join(this.outputDir, "urlList.txt");
+    fs.writeFileSync(filePath, urls.join("\n"), "utf-8");
+  }
 }
 
 module.exports = HTMLGenerator;
