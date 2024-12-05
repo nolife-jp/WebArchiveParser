@@ -8,7 +8,11 @@ const path = require("path");
 function generateSafeFileName(url) {
     // プロトコル部分（例: "https://"）を除外
     const withoutProtocol = url.replace(/^https?:\/\//, '');
-    return withoutProtocol.replace(/[\/:]/g, "_");
+    // ドメイン部分とパス部分を分離
+    const [domain, ...pathParts] = withoutProtocol.split('/');
+    // ドメインとパスを結合して安全なファイル名を生成
+    const safeName = [domain, ...pathParts].join('_');
+    return safeName.replace(/[\/:]/g, "_");
 }
 
 /**

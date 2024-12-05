@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const { generateSafeFileName } = require("../utils/file_utils"); // 修正: 正しいパスを指定
 
 function initializeOutputDirs(baseDir) {
   const mhtmlDir = path.join(baseDir, "MHTML");
@@ -16,7 +17,7 @@ function initializeOutputDirs(baseDir) {
 }
 
 function generateOutputPaths({ baseDir, url }) {
-  const safeFileName = url.replace(/[^a-zA-Z0-9]/g, "_");
+  const safeFileName = generateSafeFileName(url);
   return {
     mhtmlPath: path.join(baseDir, "MHTML", `${safeFileName}.mhtml`),
     screenshotPath: path.join(baseDir, "Screenshots", `${safeFileName}.png`),
