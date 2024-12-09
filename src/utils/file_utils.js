@@ -12,7 +12,9 @@ function generateSafeFileName(url) {
     const [domain, ...pathParts] = withoutProtocol.split('/');
     // ドメインとパスを結合して安全なファイル名を生成
     const safeName = [domain, ...pathParts].join('_');
-    return safeName.replace(/[\/:]/g, "_");
+    return safeName
+        .replace(/[\/:]/g, "_") // パス区切り文字を置換
+        .replace(/[?&=]/g, "_"); // クエリ文字を置換
 }
 
 /**
@@ -25,11 +27,11 @@ function generateOutputPaths(baseDir, url) {
     const fileName = generateSafeFileName(url);
     return {
         mhtmlPath: path.join(baseDir, "MHTML", `${fileName}.mhtml`),
-        screenshotPath: path.join(baseDir, "Screenshots", `${fileName}.png`)
+        screenshotPath: path.join(baseDir, "Screenshots", `${fileName}.png`),
     };
 }
 
 module.exports = {
     generateSafeFileName,
-    generateOutputPaths
+    generateOutputPaths,
 };

@@ -1,30 +1,50 @@
-const cheerio = require('cheerio');
-const axios = require('axios');
+const cheerio = require("cheerio");
+const axios = require("axios");
 
 /**
- * TicketCo の URL を取得
- * @param {string} targetUrl - 対象 URL
- * @param {number|null} maxPages - 最大ページ数
- * @returns {Promise<string[]>} - 取得した URL の配列
+ * TicketCoサイトのURLを取得するフェッチャー
+ * @param {string} targetUrl - ベースURL
+ * @param {number} maxPages - 最大ページ数
+ * @returns {Promise<string[]>} - 取得したURLリスト
  */
-const fetchTicketCoUrls = async (targetUrl, maxPages = null) => {
-  const urls = [];
-  let currentPage = 1;
+async function fetchTicketCoUrls(targetUrl, maxPages = 10) {
+    const urls = [];
+    let currentPage = 0;
+    let nextPageUrl = targetUrl;
 
-  while (!maxPages || currentPage <= maxPages) {
-    const response = await axios.get(`${targetUrl}?page=${currentPage}`);
-    const $ = cheerio.load(response.data);
+    while (nextPageUrl && (maxPages === null || currentPage < maxPages)) {
+        const response = await axios.get(nextPageUrl);
+        const $ = cheerio.load(response.data);
 
-    $('.event-link').each((_, element) => {
-      const url = $(element).attr('href');
-      if (url) urls.push(new URL(url, targetUrl).toString());
-    });
+        // <form> タグからURLを生成
+        $('form.js-order_form').each((_, form) => {
+            const action = $(form).attr("action");
 
-    if (!$('.next-button').length) break; // 次ページがない場合終了
-    currentPage++;
-  }
+            if (action) {
+                const url = new URL(action, targetUrl);
+                $(form)
+                    .find('input[name][value]')
+                    .each((_, input) => {
+                        const name = $(input).attr("name");
+                        const value = $(input).attr("value");
+                        if (name && value) {
+                            url.searchParams.append(name, value);
+                        }
+                    });
+                urls.push(url.toString());
+            }
+        });
 
-  return urls;
-};
+        // 次ページリンクを取得
+        const nextPageElement = $(".pager-next a").attr("href");
+        nextPageUrl = nextPageElement
+            ? new URL(nextPageElement, targetUrl).toString()
+            : null;
+
+        currentPage++;
+    }
+
+    return urls;
+}
 
 module.exports = { fetchTicketCoUrls };
