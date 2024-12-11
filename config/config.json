@@ -4,7 +4,7 @@
       "logsDir": "logs"
     },
     "puppeteer": {
-      "viewport": { "width": 1280, "height": 720 },
+      "viewport": { "width": 1920, "height": 1080 },
       "headless": true
     },
     "timestampFormat": "YYYY-MM-DD_HHmm"

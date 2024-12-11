@@ -1,4 +1,5 @@
 const path = require("path");
+const fs = require("fs");
 const { getSiteFetcher } = require("./modules/fetcher");
 const { launchBrowser, capturePage } = require("./modules/puppeteer_utils");
 const { initializeOutputDirs, generateOutputPaths } = require("./modules/output_manager");
@@ -11,65 +12,72 @@ const { getCurrentTimestamp } = require("./utils/time_utils");
   const logger = new Logger("logs");
   try {
     const args = process.argv.slice(2);
-    if (args.length < 1) {
-      logger.error("Usage: node src/main.js <URL> [max_pages]");
-      process.exit(1);
+    const config = loadConfig();
+    let targetUrls = [];
+    let maxPages = null;
+
+    if (args.length > 0) {
+      // 引数が指定されている場合
+      const targetUrl = args[0];
+      maxPages = args[1] ? parseInt(args[1], 10) : null;
+      const fetcher = getSiteFetcher(targetUrl);
+
+      if (!fetcher) {
+        logger.error(`No fetcher available for the provided URL: ${targetUrl}`);
+        process.exit(1);
+      }
+
+      logger.info(`Fetching URLs for: ${targetUrl}`);
+      targetUrls = await fetcher(targetUrl, maxPages);
+    } else {
+      // 引数がない場合はurlList.txtを使用
+      const urlListPath = path.resolve("config", "urlList.txt");
+      if (!fs.existsSync(urlListPath)) {
+        logger.error("No URLs specified in arguments and config/urlList.txt is missing.");
+        process.exit(1);
+      }
+      const fileContent = fs.readFileSync(urlListPath, "utf-8");
+      targetUrls = fileContent
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0); // 空行を除外
+      maxPages = null; // リストからの処理ではページ制限なし
+      logger.info("Using target URLs from urlList.txt.");
     }
 
-    const targetUrl = args[0];
-    const maxPages = args[1] ? parseInt(args[1], 10) : null;
-
     logger.info("WebArchiver started");
-    logger.info(`Target URL: ${targetUrl}`);
-    logger.info(`Max Pages: ${maxPages || "Unlimited"}`);
+    logger.info(`Target URLs: ${targetUrls.join(", ")}`);
+    logger.info(`Max Pages: ${maxPages || "Not Applicable"}`);
 
-    const config = loadConfig();
     const timestamp = getCurrentTimestamp(config.timestampFormat);
     const outputDir = path.resolve(config.paths.outputDir, timestamp);
 
     const { mhtmlDir, screenshotsDir } = initializeOutputDirs(outputDir);
     logger.debug(`Directories initialized: MHTML -> ${mhtmlDir}, Screenshots -> ${screenshotsDir}`);
 
-    const fetchSiteUrls = getSiteFetcher(targetUrl);
-    if (!fetchSiteUrls) {
-      throw new Error("No valid fetch function returned by getSiteFetcher");
-    }
-
-    logger.info("Fetching URLs...");
-    const urls = await fetchSiteUrls(targetUrl, maxPages);
-    logger.info(`Fetched ${urls.length} URLs`);
-
     const browser = await launchBrowser(config.puppeteer);
     logger.info("Browser launched");
 
     const htmlGenerator = new HTMLGenerator(outputDir, "Captured Pages");
 
-    // URLリストを保存
-    htmlGenerator.saveUrlList(urls); // 新しい機能をここに追加
-
-    for (let i = 0; i < urls.length; i++) {
-      const url = urls[i];
-      logger.info(`[${i + 1}/${urls.length}] Processing URL: ${url}`);
+    for (const targetUrl of targetUrls) {
+      logger.info(`Processing URL: ${targetUrl}`);
       try {
         const outputPaths = generateOutputPaths({
           baseDir: outputDir,
-          url: url,
+          url: targetUrl,
         });
 
-        // capturePage関数からページ情報を取得
-        const pageInfo = await capturePage(browser, url, outputPaths);
-
-        // ページ情報をHTMLGeneratorに追加
+        const pageInfo = await capturePage(browser, targetUrl, outputPaths);
         htmlGenerator.addPage(pageInfo);
 
-        logger.info(`[${i + 1}/${urls.length}] Saved: ${url}`);
+        logger.info(`Saved: ${targetUrl}`);
       } catch (error) {
-        logger.error(`[${i + 1}/${urls.length}] Failed: ${error.message}`);
+        logger.error(`Failed: ${error.message}`);
       }
     }
 
     await browser.close();
-
     htmlGenerator.save();
     logger.info(`Generated index.html at: ${outputDir}`);
     logger.info("WebArchiver finished");
