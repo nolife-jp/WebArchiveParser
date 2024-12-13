@@ -1,12 +1,18 @@
 {
-    "paths": {
-      "outputDir": "output/webarchive",
-      "logsDir": "logs"
-    },
-    "puppeteer": {
-      "viewport": { "width": 1920, "height": 1080 },
-      "headless": true
-    },
-    "timestampFormat": "YYYY-MM-DD_HHmm"
+  "paths": {
+    "outputDir": "output/webarchive",
+    "logsDir": "logs",
+    "templatesDir": "src/templates"
+  },
+  "puppeteer": {
+    "viewport": { "width": 1920, "height": 1080 },
+    "headless": true,
+    "args": ["--no-sandbox", "--disable-setuid-sandbox"]
+  },
+  "timestampFormat": "YYYY-MM-DD_HHmm",
+  "timezone": "Asia/Tokyo",
+  "logging": {
+    "level": "info",
+    "file": "webarchiver.log"
   }
-  
+}

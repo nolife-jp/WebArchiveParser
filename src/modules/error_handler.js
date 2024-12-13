@@ -1,16 +1,13 @@
-// ファイルパス: src/modules/error_handler.js
-
-const fs = require('fs');
-const path = require('path');
 const { logError } = require('../utils/logger');
 
 /**
  * クリティカルエラーを処理
- * @param {Error} error
+ * @param {Error} error - 発生したエラー
  */
-function handleCriticalError(error) {
-  logError(`[CRITICAL]: ${error.message}`);
-  console.error(error.stack);
+async function handleCriticalError(error) {
+  const errorMessage = `[CRITICAL]: ${error.message}\n${error.stack}`;
+  await logError(errorMessage);
+  console.error(errorMessage);
   process.exit(1);
 }
 
