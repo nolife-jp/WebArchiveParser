@@ -1,3 +1,4 @@
+// src/modules/output_manager.js
 const fs = require('fs').promises;
 const path = require('path');
 const { generateSafeFileName } = require('../utils/file_utils');
@@ -15,15 +16,9 @@ async function initializeOutputDirs(baseDir) {
     await fs.mkdir(mhtmlDir, { recursive: true });
     await fs.mkdir(screenshotsDir, { recursive: true });
 
-    return {
-      baseDir: baseDir,
-      mhtmlDir: mhtmlDir,
-      screenshotsDir: screenshotsDir,
-    };
+    return { mhtmlDir, screenshotsDir };
   } catch (error) {
-    throw new Error(
-      `Failed to initialize output directories: ${error.message}`
-    );
+    throw new Error(`Failed to initialize output directories: ${error.message}`);
   }
 }
 

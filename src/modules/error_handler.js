@@ -1,14 +1,16 @@
-const { logError } = require('../utils/logger');
+// src/modules/error_handler.js
 
 /**
- * クリティカルエラーを処理
- * @param {Error} error - 発生したエラー
+ * エラーハンドラー関数
+ * @param {Error} error - エラーオブジェクト
+ * @param {Logger} logger - ログ出力用のロガー
  */
-async function handleCriticalError(error) {
-  const errorMessage = `[CRITICAL]: ${error.message}\n${error.stack}`;
-  await logError(errorMessage);
-  console.error(errorMessage);
-  process.exit(1);
+function handleError(error, logger) {
+  if (logger) {
+    logger.error(`${error.message}\n${error.stack}`);
+  } else {
+    console.error(`${error.message}\n${error.stack}`);
+  }
 }
 
-module.exports = { handleCriticalError };
+module.exports = { handleError };

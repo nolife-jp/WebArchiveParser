@@ -1,6 +1,6 @@
-const cheerio = require('cheerio');
-const axios = require('axios');
-const Logger = require('../utils/logger');
+// src/sites/ticketjam.js
+const { fetchHtml } = require('../utils/fetch_utils');
+const { URL } = require('url');
 
 /**
  * TicketJam ページから `/ticket/live_domestic` 配下の URL を取得します。
@@ -14,44 +14,35 @@ async function fetchTicketJamUrls(baseUrl, maxPages = 1, logger = console) {
   try {
     for (let page = 1; page <= maxPages; page++) {
       const url = `${baseUrl}?page=${page}`;
-      logger.info(`TicketJam から URL を取得中: ${url}`);
-      let response;
+      logger.info(`Fetching TicketJam URLs from: ${url}`);
+      let $;
       try {
-        response = await axios.get(url);
+        $ = await fetchHtml(url);
       } catch (axiosError) {
-        logger.error(
-          `ページ ${page} の取得中にエラーが発生しました: ${axiosError.message}`
-        );
+        logger.error(`Failed to fetch page ${page}: ${axiosError.message}`);
         break; // ページ取得に失敗した場合はループを抜ける
       }
 
-      if (response.status === 200) {
-        const $ = cheerio.load(response.data);
+      const items = $('.eventlist__item a.eventlist__wrap');
+      if (items.length === 0) {
+        logger.info(`No events found on page ${page}. Terminating fetch.`);
+        break; // イベントがない場合はループを抜ける
+      }
 
-        const items = $('.eventlist__item a.eventlist__wrap');
-        if (items.length === 0) {
-          logger.info(
-            `ページ ${page} にイベントが見つかりませんでした。処理を終了します。`
-          );
-          break; // イベントがない場合はループを抜ける
-        }
-
-        items.each((_, element) => {
-          const href = $(element).attr('href');
-          if (href && href.startsWith('/ticket/live_domestic')) {
+      items.each((_, element) => {
+        const href = $(element).attr('href');
+        if (href && href.startsWith('/ticket/live_domestic')) {
+          try {
             const fullUrl = new URL(href, 'https://ticketjam.jp').toString();
             fetchedUrls.push(fullUrl);
+          } catch (urlError) {
+            logger.error(`Invalid href: ${href} - ${urlError.message}`);
           }
-        });
-      } else {
-        logger.error(
-          `ページ ${page} の取得に失敗しました。ステータスコード: ${response.status}`
-        );
-        break; // ページ取得に失敗した場合はループを抜ける
-      }
+        }
+      });
     }
   } catch (error) {
-    logger.error(`URL の取得中にエラーが発生しました: ${error.message}`);
+    logger.error(`Error fetching TicketJam URLs: ${error.message}`);
     throw error; // エラーを上位に伝播させる
   }
 

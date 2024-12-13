@@ -1,6 +1,24 @@
+// src/modules/fetcher.js
 const { fetchTicketJamUrls } = require('../sites/ticketjam');
 const { fetchTicketCoUrls } = require('../sites/ticketco');
 const { URL } = require('url');
+
+/**
+ * サイトごとのフェッチャー関数のマッピング
+ */
+const siteFetchers = {
+  'ticketjam.jp': fetchTicketJamUrls,
+  'ticket.co.jp': fetchTicketCoUrls,
+};
+
+/**
+ * ホスト名からサブドメイン（wwwなど）を削除する関数
+ * @param {string} hostname - ホスト名
+ * @returns {string} - サブドメインを除いたホスト名
+ */
+function normalizeHostname(hostname) {
+  return hostname.startsWith('www.') ? hostname.slice(4) : hostname;
+}
 
 /**
  * 対象サイトに応じた URL フェッチャーを返す
@@ -11,13 +29,12 @@ const { URL } = require('url');
 const getSiteFetcher = (targetUrl) => {
   try {
     const parsedUrl = new URL(targetUrl);
-    const hostname = parsedUrl.hostname.toLowerCase();
+    let hostname = parsedUrl.hostname.toLowerCase();
+    hostname = normalizeHostname(hostname); // サブドメインを除去
 
-    if (hostname.includes('ticketjam.jp')) {
-      return fetchTicketJamUrls;
-    }
-    if (hostname.includes('ticket.co.jp')) {
-      return fetchTicketCoUrls;
+    const fetcher = siteFetchers[hostname];
+    if (fetcher) {
+      return fetcher;
     }
     throw new Error(`Unsupported site: ${hostname}`);
   } catch (error) {

@@ -1,10 +1,13 @@
+// src/modules/html_generator.js
 const fs = require('fs').promises;
 const path = require('path');
 const ejs = require('ejs');
-const dayjs = require('dayjs');
-const { loadConfig } = require('../../config/loader'); // パスを修正
-const { formatDate } = require('../utils/time_utils'); // 修正: formatDateを使用
+const { loadConfig } = require('../../config/loader');
+const { formatDate } = require('../utils/time_utils');
 
+/**
+ * HTMLGenerator クラス
+ */
 class HTMLGenerator {
   /**
    * HTMLGenerator のコンストラクタ

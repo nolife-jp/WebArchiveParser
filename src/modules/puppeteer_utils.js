@@ -1,40 +1,28 @@
+// src/modules/puppeteer_utils.js
 const puppeteer = require('puppeteer');
 const fs = require('fs').promises;
 
 /**
- * ブラウザを起動
- * @param {Object} options - Puppeteerの起動オプション
- * @returns {Promise<Browser>} - Puppeteerのブラウザインスタンス
- */
-async function launchBrowser(options) {
-  try {
-    const browser = await puppeteer.launch(options);
-    return browser;
-  } catch (error) {
-    throw new Error(`Failed to launch browser: ${error.message}`);
-  }
-}
-
-/**
- * ページをキャプチャ（スクリーンショットとMHTML）
- * @param {Browser} browser - Puppeteerのブラウザインスタンス
+ * ページをキャプチャし、MHTMLとスクリーンショットを保存する関数
+ * @param {puppeteer.Browser} browser - Puppeteerのブラウザインスタンス
  * @param {string} url - キャプチャ対象のURL
- * @param {Object} outputPaths - 出力パス
- * @returns {Promise<Object>} - キャプチャ情報
+ * @param {object} outputPaths - 保存先のパス
+ * @param {Logger} logger - ログ出力用のロガー
+ * @returns {Promise<object>} - キャプチャ情報
  */
-async function capturePage(browser, url, outputPaths) {
+async function capturePage(browser, url, outputPaths, logger) {
   const page = await browser.newPage();
   try {
+    await logger.debug(`Navigating to URL: ${url}`);
     await page.goto(url, { waitUntil: 'networkidle2' });
 
     // ページタイトルを取得
     const pageTitle = await page.title();
+    await logger.debug(`Page title: ${pageTitle}`);
 
     // MHTMLスナップショットを取得
     const client = await page.target().createCDPSession();
-    const { data } = await client.send('Page.captureSnapshot', {
-      format: 'mhtml',
-    });
+    const { data } = await client.send('Page.captureSnapshot', { format: 'mhtml' });
 
     // MHTMLとスクリーンショットを保存
     await fs.writeFile(outputPaths.mhtmlPath, data, 'utf-8');
@@ -42,7 +30,7 @@ async function capturePage(browser, url, outputPaths) {
 
     return {
       title: pageTitle,
-      url: url,
+      url,
       mhtmlPath: outputPaths.mhtmlPath,
       screenshotPath: outputPaths.screenshotPath,
     };
@@ -50,6 +38,23 @@ async function capturePage(browser, url, outputPaths) {
     throw new Error(`Failed to capture page (${url}): ${error.message}`);
   } finally {
     await page.close();
+  }
+}
+
+/**
+ * Puppeteerのブラウザを起動する関数
+ * @param {object} options - Puppeteerの起動オプション
+ * @returns {Promise<puppeteer.Browser>} - Puppeteerのブラウザインスタンス
+ */
+async function launchBrowser(options) {
+  try {
+    const browser = await puppeteer.launch({
+      headless: options.headless,
+      args: options.args,
+    });
+    return browser;
+  } catch (error) {
+    throw new Error(`Failed to launch browser: ${error.message}`);
   }
 }
 

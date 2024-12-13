@@ -1,11 +1,12 @@
+// src/utils/logger.js
 const fs = require('fs').promises;
 const path = require('path');
 const dayjs = require('dayjs');
 const utc = require('dayjs/plugin/utc');
-const timezone = require('dayjs/plugin/timezone');
+const timezonePlugin = require('dayjs/plugin/timezone');
 
 dayjs.extend(utc);
-dayjs.extend(timezone);
+dayjs.extend(timezonePlugin);
 
 class Logger {
   /**
@@ -20,17 +21,19 @@ class Logger {
     this.isDebug = isDebug;
     this.timezoneStr = timezoneStr;
 
-    this.initializeLogDir();
+    this.init();
   }
 
   /**
-   * ログディレクトリを初期化
+   * ログディレクトリを初期化（同期的に）
    */
-  async initializeLogDir() {
+  init() {
     try {
-      await fs.mkdir(this.logDir, { recursive: true });
+      fs.mkdir(this.logDir, { recursive: true }).catch((error) => {
+        console.error(`Failed to create log directory: ${error.message}`);
+      });
     } catch (error) {
-      console.error(`Failed to create log directory: ${error.message}`);
+      console.error(`Failed to initialize logger: ${error.message}`);
     }
   }
 
@@ -40,9 +43,7 @@ class Logger {
    * @param {string} message - ログメッセージ
    */
   async log(level, message) {
-    const timestamp = dayjs()
-      .tz(this.timezoneStr)
-      .format('YYYY/MM/DD HH:mm:ss');
+    const timestamp = dayjs().tz(this.timezoneStr).format('YYYY/MM/DD HH:mm:ss');
     const formattedMessage = `[${timestamp}] ${level.toUpperCase()}: ${message}`;
     try {
       await fs.appendFile(this.logFile, formattedMessage + '\n');
