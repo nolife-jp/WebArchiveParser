@@ -8,9 +8,10 @@ const fs = require('fs').promises;
  * @param {string} url - キャプチャ対象のURL
  * @param {object} outputPaths - 保存先のパス
  * @param {Logger} logger - ログ出力用のロガー
+ * @param {boolean} captureScreenshot - スクリーンショットを取得するかどうか
  * @returns {Promise<object>} - キャプチャ情報
  */
-async function capturePage(browser, url, outputPaths, logger) {
+async function capturePage(browser, url, outputPaths, logger, captureScreenshot) {
   const page = await browser.newPage();
   try {
     await logger.debug(`Navigating to URL: ${url}`);
@@ -24,15 +25,26 @@ async function capturePage(browser, url, outputPaths, logger) {
     const client = await page.target().createCDPSession();
     const { data } = await client.send('Page.captureSnapshot', { format: 'mhtml' });
 
-    // MHTMLとスクリーンショットを保存
+    // MHTMLを保存
     await fs.writeFile(outputPaths.mhtmlPath, data, 'utf-8');
-    await page.screenshot({ path: outputPaths.screenshotPath, fullPage: true });
+    await logger.debug(`Saved MHTML: ${outputPaths.mhtmlPath}`);
+
+    let screenshotPath = null;
+    await logger.debug(`Capture Screenshot Flag: ${captureScreenshot}`);
+    if (captureScreenshot && outputPaths.screenshotPath) {
+      // スクリーンショットを保存
+      await page.screenshot({ path: outputPaths.screenshotPath, fullPage: true });
+      await logger.debug(`Saved Screenshot: ${outputPaths.screenshotPath}`);
+      screenshotPath = outputPaths.screenshotPath;
+    } else {
+      await logger.debug(`Screenshot not captured for URL: ${url}`);
+    }
 
     return {
       title: pageTitle,
       url,
       mhtmlPath: outputPaths.mhtmlPath,
-      screenshotPath: outputPaths.screenshotPath,
+      screenshotPath, // PNGが保存されていない場合は null
     };
   } catch (error) {
     throw new Error(`Failed to capture page (${url}): ${error.message}`);

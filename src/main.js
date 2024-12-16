@@ -16,14 +16,22 @@ const { formatDate } = require('./utils/time_utils');
   const config = await loadConfig();
   const logger = new Logger(
     config.paths.logsDir,
-    config.logging.level === 'debug',
+    config.logging.level === 'debug', // ログレベルに基づいて DEBUG フラグを設定
     config.timezone
   );
 
   try {
+    // コマンドライン引数の解析
     const args = process.argv.slice(2);
+    const includeMainUrl = args.includes('--include-main-url');
+    const captureScreenshot = !args.includes('--no-screenshot');
+
+    // フラグの解析状態をログに出力
+    await logger.info(`Flags - includeMainUrl: ${includeMainUrl}, captureScreenshot: ${captureScreenshot}`);
+
     let targetUrls = [];
     let maxPages = null;
+    let indexUrls = []; // フェッチ元URLを格納する配列
 
     if (args.length > 0) {
       const targetUrl = args[0];
@@ -36,7 +44,26 @@ const { formatDate } = require('./utils/time_utils');
       }
 
       await logger.info(`Fetching URLs for: ${targetUrl}`);
-      targetUrls = await fetcher(targetUrl, maxPages, logger);
+
+      // ページ数の制限を考慮してフェッチ
+      const fetchedUrls = await fetcher(targetUrl, maxPages, logger, indexUrls);
+
+      // fetchedUrls の件数をログに出力
+      await logger.info(`Fetched URLs count: ${fetchedUrls.length}`);
+
+      if (includeMainUrl) {
+        // メインURLをキャプチャ対象に含めるが、urlList.txtには含めない
+        targetUrls.unshift(targetUrl);
+        await logger.info(`Including main URL in capture: ${targetUrl}`);
+      }
+
+      // fetchedUrls を targetUrls に追加
+      targetUrls = [...targetUrls, ...fetchedUrls];
+      await logger.info(`Target URLs before deduplication: ${targetUrls.length}`);
+
+      // 重複を排除
+      targetUrls = [...new Set(targetUrls)];
+      await logger.info(`Target URLs after deduplication: ${targetUrls.length}`);
     } else {
       const urlListPath = path.resolve('config', 'urlList.txt');
       try {
@@ -54,7 +81,7 @@ const { formatDate } = require('./utils/time_utils');
       await logger.info('Using target URLs from urlList.txt.');
     }
 
-    // "Target URLs" のログを件数のみ表示
+    // 総対象URL件数をログに出力
     await logger.info(`Total Target URLs: ${targetUrls.length}`);
 
     await logger.info('WebArchiver started');
@@ -63,13 +90,18 @@ const { formatDate } = require('./utils/time_utils');
     const timestamp = formatDate(new Date(), config.timestampFormat, config.timezone);
     const outputDir = path.resolve(config.paths.outputDir, timestamp);
 
-    const { mhtmlDir, screenshotsDir } = await initializeOutputDirs(outputDir);
-    await logger.debug(`Directories initialized: MHTML -> ${mhtmlDir}, Screenshots -> ${screenshotsDir}`);
+    // initializeOutputDirs に captureScreenshot を渡す
+    const { mhtmlDir, screenshotsDir } = await initializeOutputDirs(outputDir, captureScreenshot);
+    if (captureScreenshot) {
+      await logger.info(`Directories initialized: MHTML -> ${mhtmlDir}, Screenshots -> ${screenshotsDir}`);
+    } else {
+      await logger.info(`Directories initialized: MHTML -> ${mhtmlDir}`);
+    }
 
     const browser = await launchBrowser(config.puppeteer);
     await logger.info('Browser launched');
 
-    const htmlGenerator = new HTMLGenerator(outputDir, 'Captured Pages');
+    const htmlGenerator = new HTMLGenerator(outputDir, 'Captured Pages', captureScreenshot);
 
     // 処理済み件数のカウンター
     let processedCount = 0;
@@ -79,11 +111,12 @@ const { formatDate } = require('./utils/time_utils');
     for (const targetUrl of targetUrls) {
       try {
         processedCount++;
-        await logger.info(`Processing URL: [${processedCount}/${totalCount}] ${targetUrl}`);
-        const outputPaths = generateOutputPaths({ baseDir: outputDir, url: targetUrl });
-        const pageInfo = await capturePage(browser, targetUrl, outputPaths, logger); // loggerを渡す
+        await logger.info(`Processing URL: ${targetUrl} [${processedCount}/${totalCount}]`);
+        const outputPaths = generateOutputPaths({ baseDir: outputDir, url: targetUrl, captureScreenshot });
+        await logger.debug(`Generated Output Paths: MHTML -> ${outputPaths.mhtmlPath}${captureScreenshot ? `, Screenshot -> ${outputPaths.screenshotPath}` : ''}`);
+        const pageInfo = await capturePage(browser, targetUrl, outputPaths, logger, captureScreenshot); // loggerとフラグを渡す
         htmlGenerator.addPage(pageInfo);
-        await logger.info(`Saved: [${processedCount}/${totalCount}] ${targetUrl}`);
+        await logger.info(`Saved: ${targetUrl} [${processedCount}/${totalCount}]`);
       } catch (error) {
         await logger.error(`Failed to capture ${targetUrl}: ${error.message}`);
       }
@@ -91,7 +124,18 @@ const { formatDate } = require('./utils/time_utils');
 
     await browser.close();
     await htmlGenerator.save(config.paths.templatesDir);
-    await htmlGenerator.saveUrlList(targetUrls);
+    await htmlGenerator.saveUrlList(targetUrls.filter(url => url !== args[0])); // main URLを除外
+
+    // indexUrls.txt の保存
+    const indexUrlsPath = path.join(outputDir, 'indexUrls.txt');
+    await fs.writeFile(indexUrlsPath, indexUrls.join('\n'), 'utf-8');
+    await logger.info(`Generated indexUrls.txt at: ${indexUrlsPath}`);
+
+    // urlList.txt の保存
+    const urlListPath = path.join(outputDir, 'urlList.txt');
+    await fs.writeFile(urlListPath, targetUrls.join('\n'), 'utf-8');
+    await logger.info(`Generated urlList.txt at: ${urlListPath}`);
+
     await logger.info(`Generated index.html at: ${outputDir}`);
     await logger.info('WebArchiver finished');
   } catch (error) {

@@ -1,49 +1,79 @@
 // src/sites/ticketjam.js
-const { fetchHtml } = require('../utils/fetch_utils');
+const axios = require('axios');
+const cheerio = require('cheerio');
 const { URL } = require('url');
 
 /**
- * TicketJam ページから `/ticket/live_domestic` 配下の URL を取得します。
- * @param {string} baseUrl - スクレイピングを開始する基点の URL
- * @param {number} maxPages - スクレイピングする最大ページ数
- * @param {Logger} logger - ログ出力用のロガー
- * @returns {Promise<string[]>} - 取得した URL の配列
+ * TicketJamからURLをフェッチする関数
+ * @param {string} baseUrl - 基本URL
+ * @param {number|null} maxPages - 最大ページ数
+ * @param {Logger} logger - Loggerインスタンス
+ * @param {Array} indexUrls - フェッチ元URLを格納する配列
+ * @returns {Array} - フェッチされたURLの配列
  */
-async function fetchTicketJamUrls(baseUrl, maxPages = 1, logger = console) {
+async function fetchTicketJamUrls(baseUrl, maxPages, logger, indexUrls) {
   const fetchedUrls = [];
-  try {
-    for (let page = 1; page <= maxPages; page++) {
-      const url = `${baseUrl}?page=${page}`;
-      logger.info(`Fetching TicketJam URLs from: ${url}`);
-      let $;
-      try {
-        $ = await fetchHtml(url);
-      } catch (axiosError) {
-        logger.error(`Failed to fetch page ${page}: ${axiosError.message}`);
-        break; // ページ取得に失敗した場合はループを抜ける
-      }
+  let currentPage = 1;
 
-      const items = $('.eventlist__item a.eventlist__wrap');
-      if (items.length === 0) {
-        logger.info(`No events found on page ${page}. Terminating fetch.`);
-        break; // イベントがない場合はループを抜ける
-      }
+  while (true) {
+    if (maxPages && currentPage > maxPages) {
+      logger.info(`Reached maxPages limit: ${maxPages}. Stopping fetch.`);
+      break;
+    }
 
-      items.each((_, element) => {
+    // URLクラスを使用してクエリパラメータを適切に設定
+    let urlObj;
+    try {
+      urlObj = new URL(baseUrl);
+    } catch (error) {
+      logger.error(`Invalid baseUrl: ${baseUrl} - ${error.message}`);
+      break;
+    }
+    urlObj.searchParams.set('page', currentPage);
+    const pageUrl = urlObj.toString();
+
+    logger.info(`Fetching TicketJam URLs from: ${pageUrl}`);
+    indexUrls.push(pageUrl); // フェッチ元URLを追加
+
+    try {
+      const response = await axios.get(pageUrl);
+      const html = response.data;
+      const $ = cheerio.load(html);
+
+      // 実際のセレクタに合わせて調整してください
+      const pageUrls = [];
+      $('a.eventlist__wrap').each((_, element) => {
         const href = $(element).attr('href');
         if (href && href.startsWith('/ticket/live_domestic')) {
           try {
-            const fullUrl = new URL(href, 'https://ticketjam.jp').toString();
-            fetchedUrls.push(fullUrl);
+            const absoluteUrl = new URL(href, 'https://ticketjam.jp').href;
+            pageUrls.push(absoluteUrl);
           } catch (urlError) {
             logger.error(`Invalid href: ${href} - ${urlError.message}`);
           }
         }
       });
+
+      // ページにURLが存在しない場合、終了
+      if (pageUrls.length === 0) {
+        logger.info(`No URLs found on page ${currentPage}. Stopping fetch.`);
+        break;
+      }
+
+      fetchedUrls.push(...pageUrls);
+
+      // 次ページが存在しない場合、終了
+      const hasNextPage = $('a[rel=next]').length > 0; // セレクタを修正
+      if (!hasNextPage) {
+        logger.info(`No next page found after page ${currentPage}. Stopping fetch.`);
+        break;
+      }
+
+      currentPage++;
+    } catch (error) {
+      logger.error(`Failed to fetch URLs from ${pageUrl}: ${error.message}`);
+      break;
     }
-  } catch (error) {
-    logger.error(`Error fetching TicketJam URLs: ${error.message}`);
-    throw error; // エラーを上位に伝播させる
   }
 
   return fetchedUrls;

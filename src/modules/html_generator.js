@@ -2,71 +2,69 @@
 const fs = require('fs').promises;
 const path = require('path');
 const ejs = require('ejs');
-const { loadConfig } = require('../../config/loader');
-const { formatDate } = require('../utils/time_utils');
 
 /**
- * HTMLGenerator クラス
+ * HTML生成クラス
  */
 class HTMLGenerator {
   /**
-   * HTMLGenerator のコンストラクタ
-   * @param {string} outputDir - 出力ディレクトリのパス
+   * コンストラクタ
+   * @param {string} outputDir - 出力ディレクトリ
    * @param {string} title - HTMLのタイトル
+   * @param {boolean} captureScreenshot - スクリーンショットを表示するかどうか
    */
-  constructor(outputDir, title = 'Captured Pages') {
+  constructor(outputDir, title, captureScreenshot) {
     this.outputDir = outputDir;
     this.title = title;
+    this.captureScreenshot = captureScreenshot;
     this.pages = [];
   }
 
   /**
-   * ページ情報を追加
-   * @param {Object} pageInfo - ページ情報
+   * ページ情報を追加する関数
+   * @param {object} pageInfo - ページ情報
    */
   addPage(pageInfo) {
     this.pages.push(pageInfo);
   }
 
   /**
-   * HTMLファイルを保存
-   * @param {string} templateDir - テンプレートディレクトリのパス
+   * index.ejs を元に index.html を保存する関数
+   * @param {string} templatesDir - テンプレートディレクトリ
    */
-  async save(templateDir) {
+  async save(templatesDir) {
+    const templatePath = path.join(templatesDir, 'index.ejs');
     try {
-      const templatePath = path.join(templateDir, 'index.ejs');
-      const outputPath = path.join(this.outputDir, 'index.html');
-
-      // テンプレートの存在確認
-      await fs.access(templatePath).catch(() => {
-        throw new Error(`Template not found: ${templatePath}`);
-      });
-
-      const templateContent = await fs.readFile(templatePath, 'utf-8');
-      const config = await loadConfig();
-      const data = {
+      const date = new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
+      const renderedHtml = await ejs.renderFile(templatePath, {
         title: this.title,
-        date: formatDate(new Date(), config.timestampFormat, config.timezone),
-        pages: this.pages,
-      };
+        date: date,
+        pages: this.pages.map(page => ({
+          title: page.title,
+          url: page.url,
+          mhtmlPath: path.relative(this.outputDir, page.mhtmlPath),
+          screenshotPath: page.screenshotPath ? path.relative(this.outputDir, page.screenshotPath) : null,
+        })),
+      }, { async: true });
 
-      const htmlContent = ejs.render(templateContent, data);
-      await fs.writeFile(outputPath, htmlContent, 'utf-8');
+      const indexPath = path.join(this.outputDir, 'index.html');
+      await fs.writeFile(indexPath, renderedHtml, 'utf-8');
     } catch (error) {
-      throw new Error(`Failed to save HTML: ${error.message}`);
+      throw new Error(`Failed to generate index.html: ${error.message}`);
     }
   }
 
   /**
-   * URLリストを urlList.txt として保存
-   * @param {string[]} urls - 保存するURLリスト
+   * URLリストを保存する関数
+   * @param {string[]} urls - URLの配列
    */
   async saveUrlList(urls) {
+    const urlListPath = path.join(this.outputDir, 'urlList.txt');
+    const content = urls.join('\n');
     try {
-      const filePath = path.join(this.outputDir, 'urlList.txt');
-      await fs.writeFile(filePath, urls.join('\n'), 'utf-8');
+      await fs.writeFile(urlListPath, content, 'utf-8');
     } catch (error) {
-      throw new Error(`Failed to save URL list: ${error.message}`);
+      throw new Error(`Failed to write urlList.txt: ${error.message}`);
     }
   }
 }

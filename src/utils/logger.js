@@ -25,15 +25,13 @@ class Logger {
   }
 
   /**
-   * ログディレクトリを初期化（同期的に）
+   * ログディレクトリを初期化（非同期）
    */
-  init() {
+  async init() {
     try {
-      fs.mkdir(this.logDir, { recursive: true }).catch((error) => {
-        console.error(`Failed to create log directory: ${error.message}`);
-      });
+      await fs.mkdir(this.logDir, { recursive: true });
     } catch (error) {
-      console.error(`Failed to initialize logger: ${error.message}`);
+      console.error(`Failed to create log directory: ${error.message}`);
     }
   }
 
@@ -50,7 +48,8 @@ class Logger {
     } catch (error) {
       console.error(`Failed to write to log file: ${error.message}`);
     }
-    if (this.isDebug || level !== 'debug') {
+    // 修正箇所: 'debug' レベルのみ isDebug フラグに依存
+    if (level !== 'debug' || this.isDebug) {
       console.log(formattedMessage);
     }
   }

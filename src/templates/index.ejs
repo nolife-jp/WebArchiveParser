@@ -22,7 +22,9 @@
       <p>URL: <a href="<%= page.url %>" target="_blank"><%= page.url %></a></p>
       <div class="links">
         <a href="<%= page.mhtmlPath %>" target="_blank" class="button">MHTML ファイル</a>
-        <a href="<%= page.screenshotPath %>" target="_blank" class="button">スクリーンショット</a>
+        <% if (page.screenshotPath) { %>
+          <a href="<%= page.screenshotPath %>" target="_blank" class="button">スクリーンショット</a>
+        <% } %>
       </div>
     </div>
   <% }); %>

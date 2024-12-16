@@ -1,45 +1,19 @@
 // src/modules/fetcher.js
 const { fetchTicketJamUrls } = require('../sites/ticketjam');
-const { fetchTicketCoUrls } = require('../sites/ticketco');
-const { URL } = require('url');
 
 /**
- * サイトごとのフェッチャー関数のマッピング
+ * TicketJam用のフェッチ関数を取得
+ * @param {string} url - 対象URL
+ * @returns {Function|null} - フェッチ関数
  */
-const siteFetchers = {
-  'ticketjam.jp': fetchTicketJamUrls,
-  'ticket.co.jp': fetchTicketCoUrls,
-};
-
-/**
- * ホスト名からサブドメイン（wwwなど）を削除する関数
- * @param {string} hostname - ホスト名
- * @returns {string} - サブドメインを除いたホスト名
- */
-function normalizeHostname(hostname) {
-  return hostname.startsWith('www.') ? hostname.slice(4) : hostname;
-}
-
-/**
- * 対象サイトに応じた URL フェッチャーを返す
- * @param {string} targetUrl - 対象 URL
- * @returns {Function} - 適切なフェッチャー関数
- * @throws {Error} - サイトがサポートされていない場合
- */
-const getSiteFetcher = (targetUrl) => {
-  try {
-    const parsedUrl = new URL(targetUrl);
-    let hostname = parsedUrl.hostname.toLowerCase();
-    hostname = normalizeHostname(hostname); // サブドメインを除去
-
-    const fetcher = siteFetchers[hostname];
-    if (fetcher) {
-      return fetcher;
-    }
-    throw new Error(`Unsupported site: ${hostname}`);
-  } catch (error) {
-    throw new Error(`Invalid URL provided: ${targetUrl}`);
+function getSiteFetcher(url) {
+  // 正規表現を使用して任意のアーティストのevent_groups URLをマッチ
+  const ticketJamRegex = /^https?:\/\/ticketjam\.jp\/tickets\/[^\/]+\/event_groups\/\d+/;
+  if (ticketJamRegex.test(url)) {
+    return fetchTicketJamUrls;
   }
-};
+  // 他のサイト用のフェッチ関数をここに追加
+  return null;
+}
 
 module.exports = { getSiteFetcher };
