@@ -23,6 +23,7 @@ async function loadConfig() {
         viewport: Joi.object({
           width: Joi.number().integer().min(0).required(),
           height: Joi.number().integer().min(0).required(),
+          deviceScaleFactor: Joi.number().integer().min(1).default(1), // 追加
         }).required(),
         headless: Joi.boolean().required(),
         args: Joi.array().items(Joi.string()).required(),

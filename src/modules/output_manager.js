@@ -1,6 +1,7 @@
 // src/modules/output_manager.js
 const fs = require('fs').promises;
 const path = require('path');
+const { generateSafeFileName } = require('../utils/file_utils'); // 追加
 
 /**
  * 出力ディレクトリを初期化する関数
@@ -30,7 +31,8 @@ async function initializeOutputDirs(outputDir, captureScreenshot) {
  * @returns {Object} - MHTMLパスと、必要ならScreenshotパス
  */
 function generateOutputPaths({ baseDir, url, captureScreenshot }) {
-  const sanitizeUrl = url.replace(/[^a-zA-Z0-9]/g, '_');
+  // URLからプロトコルを除去し、ファイル名を生成
+  const sanitizeUrl = generateSafeFileName(url); // generateSafeFileName を使用
   const mhtmlPath = path.join(baseDir, 'MHTML', `${sanitizeUrl}.mhtml`);
   let screenshotPath = null;
 

@@ -1,7 +1,6 @@
 // src/sites/ticketco.js
 const cheerio = require('cheerio');
 const axios = require('axios');
-const { generateSafeFileName } = require('../utils/file_utils');
 const { generateUrlFromForm } = require('../utils/url_utils');
 
 /**
@@ -9,9 +8,10 @@ const { generateUrlFromForm } = require('../utils/url_utils');
  * @param {string} targetUrl - ベースURL
  * @param {number} maxPages - 最大ページ数
  * @param {Logger} logger - ログ出力用のロガー
+ * @param {Array} indexUrls - フェッチ元URLを格納する配列
  * @returns {Promise<string[]>} - 取得したURLリスト
  */
-async function fetchTicketCoUrls(targetUrl, maxPages = 10, logger = console) {
+async function fetchTicketCoUrls(targetUrl, maxPages = 10, logger = console, indexUrls = []) {
   const urls = [];
   let currentPage = 0;
   let nextPageUrl = targetUrl;
@@ -19,6 +19,10 @@ async function fetchTicketCoUrls(targetUrl, maxPages = 10, logger = console) {
   try {
     while (nextPageUrl && (maxPages === null || currentPage < maxPages)) {
       logger.info(`Fetching TicketCo URLs from: ${nextPageUrl}`);
+      
+      // 現在のページURLを indexUrls に追加
+      indexUrls.push(nextPageUrl);
+      
       try {
         const response = await axios.get(nextPageUrl);
         const $ = cheerio.load(response.data);

@@ -15,10 +15,7 @@ function generateSafeFileName(url) {
     // スキーム（http://, https://）を除去
     let sanitized = parsedUrl.href.replace(/^https?:\/\//, '');
     
-    // 指定された記号をアンダースコアに置換
-    sanitized = sanitized.replace(/[\/\?\.\&\%\=]/g, '_');
-    
-    // ファイル名に使用できない文字を更に置換
+    // ファイル名に使用できない文字をアンダースコアに置換（ハイフンとアンダースコアは保持）
     sanitized = sanitized.replace(/[^a-zA-Z0-9-_]/g, '_');
     
     // 長すぎるファイル名を避けるために、一定の長さを超える場合はハッシュを追加

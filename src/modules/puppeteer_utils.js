@@ -9,11 +9,18 @@ const fs = require('fs').promises;
  * @param {object} outputPaths - 保存先のパス
  * @param {Logger} logger - ログ出力用のロガー
  * @param {boolean} captureScreenshot - スクリーンショットを取得するかどうか
+ * @param {object} viewport - ビューポート設定
  * @returns {Promise<object>} - キャプチャ情報
  */
-async function capturePage(browser, url, outputPaths, logger, captureScreenshot) {
+async function capturePage(browser, url, outputPaths, logger, captureScreenshot, viewport) {
   const page = await browser.newPage();
   try {
+    // ビューポートを設定
+    if (viewport) {
+      await page.setViewport(viewport);
+      await logger.debug(`Viewport set to: ${JSON.stringify(viewport)}`);
+    }
+
     await logger.debug(`Navigating to URL: ${url}`);
     await page.goto(url, { waitUntil: 'networkidle2' });
 

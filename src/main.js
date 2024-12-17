@@ -114,7 +114,16 @@ const { formatDate } = require('./utils/time_utils');
         await logger.info(`Processing URL: ${targetUrl} [${processedCount}/${totalCount}]`);
         const outputPaths = generateOutputPaths({ baseDir: outputDir, url: targetUrl, captureScreenshot });
         await logger.debug(`Generated Output Paths: MHTML -> ${outputPaths.mhtmlPath}${captureScreenshot ? `, Screenshot -> ${outputPaths.screenshotPath}` : ''}`);
-        const pageInfo = await capturePage(browser, targetUrl, outputPaths, logger, captureScreenshot); // loggerとフラグを渡す
+        
+        // capturePage に viewport を渡す
+        const pageInfo = await capturePage(
+          browser,
+          targetUrl,
+          outputPaths,
+          logger,
+          captureScreenshot,
+          config.puppeteer.viewport // 追加
+        );
         htmlGenerator.addPage(pageInfo);
         await logger.info(`Saved: ${targetUrl} [${processedCount}/${totalCount}]`);
       } catch (error) {
