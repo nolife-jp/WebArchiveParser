@@ -131,3 +131,6 @@ dist
 
 output/
 config/urlList.txt
+
+# Puppeteer Chrome Profile (temporary)
+.tmp/
