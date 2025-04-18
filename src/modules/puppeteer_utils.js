@@ -1,21 +1,30 @@
 // src/modules/puppeteer_utils.js
 const puppeteer = require('puppeteer');
-const fs = require('fs').promises;
+const fs        = require('fs').promises;
+const os        = require('os');          // ★追加
+const path      = require('path');        // ★追加
 
 /**
- * ページをキャプチャし、MHTMLとスクリーンショットを保存する関数
- * @param {puppeteer.Browser} browser - Puppeteerのブラウザインスタンス
- * @param {string} url - キャプチャ対象のURL
- * @param {object} outputPaths - 保存先のパス
- * @param {Logger} logger - ログ出力用のロガー
- * @param {boolean} captureScreenshot - スクリーンショットを取得するかどうか
- * @param {object} viewport - ビューポート設定
- * @returns {Promise<object>} - キャプチャ情報
+ * ページをキャプチャし、MHTML とスクリーンショットを保存する
+ * @param {puppeteer.Browser} browser
+ * @param {string}             url
+ * @param {object}             outputPaths
+ * @param {Logger}             logger
+ * @param {boolean}            captureScreenshot
+ * @param {object}             viewport
+ * @returns {Promise<object>}
  */
-async function capturePage(browser, url, outputPaths, logger, captureScreenshot, viewport) {
+async function capturePage(
+  browser,
+  url,
+  outputPaths,
+  logger,
+  captureScreenshot,
+  viewport
+) {
   const page = await browser.newPage();
   try {
-    // ビューポートを設定
+    // ビューポート
     if (viewport) {
       await page.setViewport(viewport);
       await logger.debug(`Viewport set to: ${JSON.stringify(viewport)}`);
@@ -24,57 +33,51 @@ async function capturePage(browser, url, outputPaths, logger, captureScreenshot,
     await logger.debug(`Navigating to URL: ${url}`);
     await page.goto(url, { waitUntil: 'networkidle2' });
 
-    // ページタイトルを取得
+    // タイトル取得
     const pageTitle = await page.title();
     await logger.debug(`Page title: ${pageTitle}`);
 
-    // MHTMLスナップショットを取得
-    const client = await page.target().createCDPSession();
+    // MHTML スナップショット
+    const client   = await page.target().createCDPSession();
     const { data } = await client.send('Page.captureSnapshot', { format: 'mhtml' });
-
-    // MHTMLを保存
     await fs.writeFile(outputPaths.mhtmlPath, data, 'utf-8');
     await logger.debug(`Saved MHTML: ${outputPaths.mhtmlPath}`);
 
+    // スクリーンショット
     let screenshotPath = null;
-    await logger.debug(`Capture Screenshot Flag: ${captureScreenshot}`);
     if (captureScreenshot && outputPaths.screenshotPath) {
-      // スクリーンショットを保存
       await page.screenshot({ path: outputPaths.screenshotPath, fullPage: true });
       await logger.debug(`Saved Screenshot: ${outputPaths.screenshotPath}`);
       screenshotPath = outputPaths.screenshotPath;
-    } else {
-      await logger.debug(`Screenshot not captured for URL: ${url}`);
     }
 
-    return {
-      title: pageTitle,
-      url,
-      mhtmlPath: outputPaths.mhtmlPath,
-      screenshotPath, // PNGが保存されていない場合は null
-    };
-  } catch (error) {
-    throw new Error(`Failed to capture page (${url}): ${error.message}`);
+    return { title: pageTitle, url, mhtmlPath: outputPaths.mhtmlPath, screenshotPath };
   } finally {
     await page.close();
   }
 }
 
 /**
- * Puppeteerのブラウザを起動する関数
- * @param {object} options - Puppeteerの起動オプション
- * @returns {Promise<puppeteer.Browser>} - Puppeteerのブラウザインスタンス
+ * Puppeteer ブラウザを起動
+ *   ‑ userDataDir を自前で用意し、First‑Party Sets を無効化
+ * @param {object} options
+ * @returns {Promise<puppeteer.Browser>}
  */
 async function launchBrowser(options) {
-  try {
-    const browser = await puppeteer.launch({
-      headless: options.headless,
-      args: options.args,
-    });
-    return browser;
-  } catch (error) {
-    throw new Error(`Failed to launch browser: ${error.message}`);
-  }
+  const profileDir = options.userDataDir
+    ? options.userDataDir
+    : path.join(os.tmpdir(), 'webarchiver_profile');
+
+  return puppeteer.launch({
+    headless: options.headless,
+    userDataDir: profileDir,                     // ★追加
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-features=FirstPartySets',       // ★追加
+      ...(options.args || []),
+    ],
+  });
 }
 
 module.exports = { launchBrowser, capturePage };
