@@ -3,7 +3,7 @@ const fs   = require('fs').promises;
 const path = require('path');
 const Joi  = require('joi');
 
-/* ---------------- Joi スキーマ ---------------- */
+/* ------------ Joi スキーマ ------------ */
 const schema = Joi.object({
   paths: Joi.object({
     outputDir:    Joi.string().required(),
@@ -21,7 +21,10 @@ const schema = Joi.object({
     headless:        Joi.boolean().default(true),
     userDataDir:     Joi.string().optional(),
     args:            Joi.array().items(Joi.string()).default([]),
-    restartInterval: Joi.number().integer().positive().default(20),   // ★追加
+
+    restartInterval: Joi.number().integer().positive().default(20),
+    protocolTimeout: Joi.number().integer().positive().default(45000),
+    snapshotRetries: Joi.number().integer().min(0).default(1)     // ★ 追加
   }).required(),
 
   timestampFormat: Joi.string().default('YYYY-MM-DD_HHmm'),
@@ -33,16 +36,15 @@ const schema = Joi.object({
   }).required(),
 });
 
-/* ---------------- ローダ ---------------- */
+/* ------------ ローダ ------------ */
 async function loadConfig () {
-  const configPath = path.resolve(__dirname, 'config.json');
-  let raw;
-  try   { raw = await fs.readFile(configPath, 'utf-8'); }
-  catch (e) { throw new Error(`Cannot read ${configPath}: ${e.message}`); }
+  const cfgPath = path.resolve(__dirname, 'config.json');
+  const raw     = await fs.readFile(cfgPath, 'utf-8')
+                .catch(e => { throw new Error(`Cannot read ${cfgPath}: ${e.message}`); });
 
   let parsed;
   try   { parsed = JSON.parse(raw); }
-  catch (e) { throw new Error(`Invalid JSON in ${configPath}: ${e.message}`); }
+  catch (e) { throw new Error(`Invalid JSON in ${cfgPath}: ${e.message}`); }
 
   const { error, value } = schema.validate(parsed, { abortEarly: false });
   if (error) throw new Error(`Config validation error: ${error.message}`);

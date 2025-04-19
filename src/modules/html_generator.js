@@ -1,71 +1,61 @@
 // src/modules/html_generator.js
-const fs = require('fs').promises;
+const fs   = require('fs').promises;
 const path = require('path');
-const ejs = require('ejs');
 
-/**
- * HTML生成クラス
- */
 class HTMLGenerator {
-  /**
-   * コンストラクタ
-   * @param {string} outputDir - 出力ディレクトリ
-   * @param {string} title - HTMLのタイトル
-   * @param {boolean} captureScreenshot - スクリーンショットを表示するかどうか
-   */
-  constructor(outputDir, title, captureScreenshot) {
-    this.outputDir = outputDir;
-    this.title = title;
-    this.captureScreenshot = captureScreenshot;
-    this.pages = [];
+  constructor (outputDir, title, hasScreenshot) {
+    this.outputDir     = outputDir;
+    this.title         = title;
+    this.hasScreenshot = hasScreenshot;
+    this.pages         = [];             // { title, url, mhtmlPath?, screenshotPath? }
   }
 
-  /**
-   * ページ情報を追加する関数
-   * @param {object} pageInfo - ページ情報
-   */
-  addPage(pageInfo) {
+  addPage (pageInfo) {
     this.pages.push(pageInfo);
   }
 
-  /**
-   * index.ejs を元に index.html を保存する関数
-   * @param {string} templatesDir - テンプレートディレクトリ
-   */
-  async save(templatesDir) {
-    const templatePath = path.join(templatesDir, 'index.ejs');
-    try {
-      const date = new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
-      const renderedHtml = await ejs.renderFile(templatePath, {
-        title: this.title,
-        date: date,
-        pages: this.pages.map(page => ({
-          title: page.title,
-          url: page.url,
-          mhtmlPath: path.relative(this.outputDir, page.mhtmlPath),
-          screenshotPath: page.screenshotPath ? path.relative(this.outputDir, page.screenshotPath) : null,
-        })),
-      }, { async: true });
+  /* ---------- index.html を生成 ---------- */
+  async save (templatesDir) {
+    /* ① テンプレートフォルダーが null/undefined なら デフォルト ../templates を採用 */
+    const tplDir = templatesDir
+      ? path.resolve(templatesDir)
+      : path.resolve(__dirname, '../templates');
 
-      const indexPath = path.join(this.outputDir, 'index.html');
-      await fs.writeFile(indexPath, renderedHtml, 'utf-8');
-    } catch (error) {
-      throw new Error(`Failed to generate index.html: ${error.message}`);
+    const templatePath = path.join(tplDir, 'template.html');
+    let template;
+    try {
+      template = await fs.readFile(templatePath, 'utf-8');
+    } catch (e) {
+      throw new Error(`Failed to read template.html: ${e.message}`);
     }
+
+    const rows = this.pages.map(p => {
+      const mhtmlLink = p.mhtmlPath
+        ? `<a href="${path.relative(this.outputDir, p.mhtmlPath)}">MHTML</a>`
+        : '—';
+      const imgTag    = (this.hasScreenshot && p.screenshotPath)
+        ? `<img src="${path.relative(this.outputDir, p.screenshotPath)}" loading="lazy" />`
+        : '';
+      return `
+        <tr>
+          <td>${imgTag}</td>
+          <td><a href="${p.url}">${p.title || p.url}</a></td>
+          <td>${mhtmlLink}</td>
+        </tr>`;
+    }).join('\n');
+
+    const html = template
+      .replace('{{TITLE}}', this.title)
+      .replace('{{ROWS}}',  rows);
+
+    const outPath = path.join(this.outputDir, 'index.html');
+    await fs.writeFile(outPath, html, 'utf-8');
   }
 
-  /**
-   * URLリストを保存する関数
-   * @param {string[]} urls - URLの配列
-   */
-  async saveUrlList(urls) {
-    const urlListPath = path.join(this.outputDir, 'urlList.txt');
-    const content = urls.join('\n');
-    try {
-      await fs.writeFile(urlListPath, content, 'utf-8');
-    } catch (error) {
-      throw new Error(`Failed to write urlList.txt: ${error.message}`);
-    }
+  /* ---------- URL リスト保存 ---------- */
+  async saveUrlList (urls) {
+    const listPath = path.join(this.outputDir, 'all_urls.txt');
+    await fs.writeFile(listPath, urls.join('\n'), 'utf-8');
   }
 }
 

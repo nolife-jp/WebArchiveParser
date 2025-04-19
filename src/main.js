@@ -1,8 +1,8 @@
 // src/main.js
-const path = require('path');
-const fs   = require('fs').promises;
+const path  = require('path');
+const fs    = require('fs').promises;
 
-const { getSiteFetcher }   = require('./modules/fetcher');
+const { getSiteFetcher }           = require('./modules/fetcher');
 const { launchBrowser, capturePage } = require('./modules/puppeteer_utils');
 const { initializeOutputDirs, generateOutputPaths } = require('./modules/output_manager');
 const Logger        = require('./utils/logger');
@@ -11,6 +11,7 @@ const { loadConfig } = require('../config/loader');
 const { formatDate } = require('./utils/time_utils');
 
 (async () => {
+  /* ───────────── 設定とロガー ───────────── */
   const config = await loadConfig();
   const logger = new Logger(
     config.paths.logsDir,
@@ -18,24 +19,26 @@ const { formatDate } = require('./utils/time_utils');
     config.timezone
   );
 
+  /* ───────────── Puppeteer 起動 ───────────── */
   const restartInterval = config.puppeteer.restartInterval;
   let   browser         = await launchBrowser(config.puppeteer);
 
-  /* ───────── ブラウザ再起動ヘルパ ───────── */
-  async function restartBrowser(reason) {
-    await logger.warn(`Restarting browser (${reason})...`);      // ← WARN & “…”
-    try { await browser.close(); } catch { /* ignore */ }
+  async function restartBrowser (reason) {
+    await logger.warn(`Restarting browser (${reason})…`);
+    try { await browser.close(); } catch {/* ignore */}
     browser = await launchBrowser(config.puppeteer);
   }
 
   try {
-    /* ───────── 引数解析 ───────── */
-    const argv               = process.argv.slice(2);
-    const includeMainUrl     = argv.includes('--include-main-url');
-    const captureScreenshot  = !argv.includes('--no-screenshot');
-    await logger.info(`Flags - includeMainUrl: ${includeMainUrl}, captureScreenshot: ${captureScreenshot}`);
+    /* ───────────── 引数解析 ───────────── */
+    const argv              = process.argv.slice(2);
+    const includeMainUrl    = argv.includes('--include-main-url');
+    const captureScreenshot = !argv.includes('--no-screenshot');
+    await logger.info(
+      `Flags - includeMainUrl: ${includeMainUrl}, captureScreenshot: ${captureScreenshot}`
+    );
 
-    /* ───────── URL 収集 ───────── */
+    /* ───────────── URL 収集 ───────────── */
     let targetUrls = [], maxPages = null, indexUrls = [];
 
     if (argv.length > 0) {
@@ -48,8 +51,9 @@ const { formatDate } = require('./utils/time_utils');
       await logger.info(`Fetching URLs for: ${rootUrl}`);
       const fetched = await fetcher(rootUrl, maxPages, logger, indexUrls);
       if (includeMainUrl) fetched.unshift(rootUrl);
+
       targetUrls = [...new Set(fetched)];
-      await logger.info(`Fetched URLs count: ${targetUrls.length}`);
+      await logger.info(`Fetched URLs count: ${fetched.length}`);
       await logger.info(`Target URLs after deduplication: ${targetUrls.length}`);
     } else {
       const listPath = path.resolve('config', 'urlList.txt');
@@ -57,21 +61,20 @@ const { formatDate } = require('./utils/time_utils');
         .split('\n').map(l => l.trim()).filter(Boolean);
     }
 
-    /* ───────── 出力先 ───────── */
+    /* ───────────── 出力先セットアップ ───────────── */
     const timestamp = formatDate(new Date(), config.timestampFormat, config.timezone);
     const outputDir = path.resolve(config.paths.outputDir, timestamp);
     const { mhtmlDir, screenshotsDir } =
       await initializeOutputDirs(outputDir, captureScreenshot);
 
     await logger.info(
-      `Directories initialized: MHTML -> ${mhtmlDir}` +
-      (captureScreenshot ? `, Screenshots -> ${screenshotsDir}` : '')
+      `Directories initialized: MHTML → ${mhtmlDir}` +
+      (captureScreenshot ? `, Screenshots → ${screenshotsDir}` : '')
     );
 
-    await logger.info('Browser launched');
-    const htmlGen  = new HTMLGenerator(outputDir, 'Captured Pages', captureScreenshot);
+    const htmlGen = new HTMLGenerator(outputDir, 'Captured Pages', captureScreenshot);
 
-    /* ───────── メインループ ───────── */
+    /* ───────────── メインループ ───────────── */
     let processed = 0;
     for (const url of targetUrls) {
       if (processed > 0 && processed % restartInterval === 0) {
@@ -79,27 +82,42 @@ const { formatDate } = require('./utils/time_utils');
       }
 
       processed++;
-      await logger.info(`Processing: ${url} [${processed}/${targetUrls.length}]`); // ← 復活
+      await logger.info(`Processing: ${url} [${processed}/${targetUrls.length}]`);
 
       let pageInfo;
       try {
         const paths = generateOutputPaths({ baseDir: outputDir, url, captureScreenshot });
+
         pageInfo = await capturePage(
-          browser, url, paths, logger,
-          captureScreenshot, config.puppeteer.viewport
+          browser,
+          url,
+          paths,
+          logger,
+          captureScreenshot,
+          config.puppeteer.viewport,
+          config.puppeteer.protocolTimeout,
+          config.puppeteer.snapshotRetries
         );
+
       } catch (err) {
-        /* ブラウザ落ち → 再起動して 1 回だけリトライ */
         if (err.message.includes('Connection closed')) {
           await restartBrowser('crash detected');
+
           try {
             const paths = generateOutputPaths({ baseDir: outputDir, url, captureScreenshot });
+
             pageInfo = await capturePage(
-              browser, url, paths, logger,
-              captureScreenshot, config.puppeteer.viewport
+              browser,
+              url,
+              paths,
+              logger,
+              captureScreenshot,
+              config.puppeteer.viewport,
+              config.puppeteer.protocolTimeout,
+              config.puppeteer.snapshotRetries
             );
-          } catch (e2) {
-            await logger.error(`Retry failed ${url}: ${e2.message}`);
+          } catch (err2) {
+            await logger.error(`Retry failed ${url}: ${err2.message}`);
             continue;
           }
         } else {
@@ -109,25 +127,26 @@ const { formatDate } = require('./utils/time_utils');
       }
 
       htmlGen.addPage(pageInfo);
-      await logger.info(`Saved: ${url}`);                          // ← URL のみ
+      await logger.info(`Saved: ${url}`);
     }
 
-    /* ───────── クリーンアップ ───────── */
+    /* ───────────── 後片付け ───────────── */
     try { await browser.close(); }
-    catch (err) {
-      if (err.code === 'EBUSY')
-        await logger.warn(`Cleanup warning (ignored): ${err.message}`);
+    catch (e) {
+      if (e.code === 'EBUSY')
+        await logger.warn(`Cleanup warning (ignored): ${e.message}`);
     }
 
-    await htmlGen.save(config.paths.templatesDir);
+    const templatesDirAbs = path.resolve(config.paths.templatesDir);   // ★ 絶対パスへ
+    await htmlGen.save(templatesDirAbs);
     await htmlGen.saveUrlList(targetUrls);
+
     await fs.writeFile(path.join(outputDir, 'indexUrls.txt'), indexUrls.join('\n'), 'utf-8');
     await fs.writeFile(path.join(outputDir, 'urlList.txt'),  targetUrls.join('\n'), 'utf-8');
-
     await logger.info(`All done: ${outputDir}`);
   } catch (err) {
     await logger.error(`Critical error: ${err.message}\n${err.stack}`);
-    try { await browser.close(); } catch {/* ignore */ }
+    try { await browser.close(); } catch {/* ignore */}
     process.exit(1);
   }
 })();

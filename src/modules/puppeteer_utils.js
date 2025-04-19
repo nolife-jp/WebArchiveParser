@@ -1,81 +1,83 @@
 // src/modules/puppeteer_utils.js
 const puppeteer = require('puppeteer');
 const fs        = require('fs').promises;
-const os        = require('os');          // ★追加
-const path      = require('path');        // ★追加
+const os        = require('os');
+const path      = require('path');
 
-/**
- * ページをキャプチャし、MHTML とスクリーンショットを保存する
- * @param {puppeteer.Browser} browser
- * @param {string}             url
- * @param {object}             outputPaths
- * @param {Logger}             logger
- * @param {boolean}            captureScreenshot
- * @param {object}             viewport
- * @returns {Promise<object>}
- */
-async function capturePage(
+async function capturePage (
   browser,
   url,
   outputPaths,
   logger,
   captureScreenshot,
-  viewport
+  viewport,
+  protoTimeout,
+  maxRetries                           // ★ 追加
 ) {
   const page = await browser.newPage();
-  try {
-    // ビューポート
-    if (viewport) {
-      await page.setViewport(viewport);
-      await logger.debug(`Viewport set to: ${JSON.stringify(viewport)}`);
-    }
+  page.setDefaultNavigationTimeout(protoTimeout);
+  page.setDefaultTimeout(protoTimeout);
 
-    await logger.debug(`Navigating to URL: ${url}`);
+  try {
+    if (viewport) await page.setViewport(viewport);
+
     await page.goto(url, { waitUntil: 'networkidle2' });
 
-    // タイトル取得
-    const pageTitle = await page.title();
-    await logger.debug(`Page title: ${pageTitle}`);
+    const title  = await page.title();
+    const client = await page.target().createCDPSession();
 
-    // MHTML スナップショット
-    const client   = await page.target().createCDPSession();
-    const { data } = await client.send('Page.captureSnapshot', { format: 'mhtml' });
-    await fs.writeFile(outputPaths.mhtmlPath, data, 'utf-8');
-    await logger.debug(`Saved MHTML: ${outputPaths.mhtmlPath}`);
+    /* ---------- Snapshot with retries ---------- */
+    let mhtml = null, attempt = 0;
+    while (attempt <= maxRetries) {
+      try {
+        mhtml = (await client.send('Page.captureSnapshot', { format: 'mhtml' })).data;
+        break;                       // 成功で抜ける
+      } catch (err) {
+        if (!err.message.includes('timed out') || attempt === maxRetries) {
+          if (err.message.includes('timed out'))
+            await logger.warn(`Snapshot timeout (giving up): ${url}`);
+          else
+            throw err;               // その他エラーは上位へ
+          break;
+        }
+        attempt++;
+        await logger.warn(`Snapshot timeout, retry ${attempt}/${maxRetries}: ${url}`);
+        await page.reload({ waitUntil: 'networkidle2' });
+      }
+    }
 
-    // スクリーンショット
+    if (mhtml) {
+      await fs.writeFile(outputPaths.mhtmlPath, mhtml, 'utf-8');
+    }
+
     let screenshotPath = null;
     if (captureScreenshot && outputPaths.screenshotPath) {
       await page.screenshot({ path: outputPaths.screenshotPath, fullPage: true });
-      await logger.debug(`Saved Screenshot: ${outputPaths.screenshotPath}`);
       screenshotPath = outputPaths.screenshotPath;
     }
 
-    return { title: pageTitle, url, mhtmlPath: outputPaths.mhtmlPath, screenshotPath };
+    return {
+      title,
+      url,
+      mhtmlPath:      mhtml ? outputPaths.mhtmlPath : null,
+      screenshotPath,
+    };
   } finally {
     await page.close();
   }
 }
 
-/**
- * Puppeteer ブラウザを起動
- *   ‑ userDataDir を自前で用意し、First‑Party Sets を無効化
- * @param {object} options
- * @returns {Promise<puppeteer.Browser>}
- */
-async function launchBrowser(options) {
-  const profileDir = options.userDataDir
-    ? options.userDataDir
-    : path.join(os.tmpdir(), 'webarchiver_profile');
-
+async function launchBrowser (opts) {
+  const profileDir = opts.userDataDir || path.join(os.tmpdir(), 'webarchiver_profile');
   return puppeteer.launch({
-    headless: options.headless,
-    userDataDir: profileDir,                     // ★追加
+    headless: opts.headless,
+    userDataDir: profileDir,
+    protocolTimeout: opts.protocolTimeout,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
-      '--disable-features=FirstPartySets',       // ★追加
-      ...(options.args || []),
+      '--disable-features=FirstPartySets',
+      ...opts.args,
     ],
   });
 }
