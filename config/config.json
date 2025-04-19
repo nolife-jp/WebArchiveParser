@@ -9,7 +9,7 @@
     "headless":   true,
     "userDataDir": ".tmp/chrome-profile",
     "args": ["--no-sandbox", "--disable-setuid-sandbox"],
-    "restartInterval": 20
+    "restartInterval": 1000
   },
   "timestampFormat": "YYYY-MM-DD_HHmm",
   "timezone":        "Asia/Tokyo",

@@ -20,7 +20,7 @@
     "ejs": "^3.1.10",
     "joi": "^17.13.3",
     "mongoose": "^8.9.2",
-    "puppeteer": "^23.10.4",
+    "puppeteer": "24.6.1",
     "yargs": "^17.7.2"
   },
   "devDependencies": {
