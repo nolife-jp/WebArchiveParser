@@ -1,0 +1,23 @@
+{
+  "paths": {
+    "outputDir":   "output/webarchive",
+    "logsDir":     "logs",
+    "templatesDir": "src/templates"
+  },
+  "puppeteer": {
+    "viewport":   { "width": 1600, "height": 900, "deviceScaleFactor": 1 },
+    "headless":   true,
+    "userDataDir": ".tmp/chrome-profile",
+    "args": ["--no-sandbox", "--disable-setuid-sandbox"],
+    "restartInterval": 100,
+    "protocolTimeout": 10000,
+    "snapshotRetries":  5,
+    "navigationRetries": 5
+  },
+  "timestampFormat": "YYYY-MM-DD_HHmm",
+  "timezone":        "Asia/Tokyo",
+  "logging": {
+    "level": "info",
+    "file":  "webarchiver.log"
+  }
+}
